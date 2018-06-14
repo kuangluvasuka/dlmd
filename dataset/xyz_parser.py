@@ -29,6 +29,7 @@ def init_graph(prop):
   g_Cv = float(prop[16])
 
   labels = [g_mu, g_alpha, g_homo, g_lumo, g_gap, g_r2, g_zpve, g_U0, g_U, g_H, g_G, g_Cv]
+  # Add graph(molecule) attributes
   return nx.Graph(tag=g_tag, index=g_index, A=g_A, B=g_B, C=g_C, mu=g_mu, alpha=g_alpha, homo=g_homo, lumo=g_lumo, gap=g_gap, r2=g_r2, zpve=g_zpve, U0=g_U0, U=g_U, H=g_H, G=g_G, Cv=g_Cv), labels
   
 def xyz_graph_decoder(xyzfile):
@@ -67,6 +68,7 @@ def xyz_graph_decoder(xyzfile):
   for i in range(m.GetNumAtoms()):
     atom_i = m.GetAtomWithIdx(i)
 
+    # Add node(atom) attributes
     g.add_node(i,
                a_type=atom_i.GetSymbol(),
                a_num=atom_i.GetAtomicNum(), 
@@ -92,6 +94,7 @@ def xyz_graph_decoder(xyzfile):
     for j in range(m.GetNumAtoms()):
       e_ij = m.GetBondBetweenAtoms(i, j)
       if e_ij is not None:
+        # Add edge(bond) attributes
         g.add_edge(i, j, 
                    b_type=e_ij.GetBondType(), 
                    distance=np.linalg.norm(g.node[i]['coord'] - g.node[j]['coord']))
@@ -100,14 +103,80 @@ def xyz_graph_decoder(xyzfile):
         g.add_edge(i, j,
                    b_type=None,
                    distance=np.linalg.norm(g.node[i]['coord'] - g.node[j]['coord']))
+  
+  h = _qm9_nodes(g)
+  g, e = _qm9_edges(g)
 
-  return g, l
+  return g, h, e, l
 
-def qm9_nodes(g, hydrogen=False):
-  pass
+def _qm9_nodes(g, hydrogen=False):
+  """Return node embedding h_v.
+  """
 
-def qm9_edges(g, e_representation='raw_distance'):
-  pass
+  # h is the embedding of atoms in the molecule
+  h = []
+  for n, d in g.nodes(data=True):
+    h_t = []
+    # Atom type (One-hot H, C, N, O, F)
+    h_t += [int(d['a_type'] == x) for x in ['H', 'C', 'N', 'O', 'F']]
+    # Atomic number
+    h_t.append(d['a_num'])
+    # Partial Charge
+    h_t.append(d['pc'])
+    # Acceptor
+    h_t.append(d['acceptor'])
+    # Donor
+    h_t.append(d['donor'])
+    # Aromatic
+    h_t.append(int(d['aromatic']))
+    # Hybridization
+    h_t += [int(d['hybridization'] == x) for x in [Chem.rdchem.HybridizationType.SP, Chem.rdchem.HybridizationType.SP2, Chem.rdchem.HybridizationType.SP3]]
+    # If number hydrogen is enabled
+    if hydrogen:
+      h_t.append(d['num_h'])
+    h.append(h_t)
+  return h
+
+def _qm9_edges(g, e_representation='raw_distance'):
+  """Return adjacency matrix and distance of edges.
+  """
+  remove_edges = []
+  e = {}
+  for n1, n2, d in g.edges(data=True):
+    e_t = []
+    # Raw distance function
+    if e_representation == 'chem_graph':
+      if d['b_type'] is None:
+        remove_edges += [(n1, n2)]
+      else:
+        e_t += [i+1 for i, x in enumerate([Chem.rdchem.BondType.SINGLE, Chem.rdchem.BondType.DOUBLE, Chem.rdchem.BondType.TRIPLE, Chem.rdchem.BondType.AROMATIC]) if x == d['b_type']]
+    elif e_representation == 'distance_bin':
+      if d['b_type'] is None:
+        step = (6-2)/8.0
+        start = 2
+        b = 9
+        for i in range(0, 9):
+          if d['distance'] < (start+i*step):
+            b = i
+            break
+        e_t.append(b+5)
+      else:
+        e_t += [i+1 for i, x in enumerate([Chem.rdchem.BondType.SINGLE, Chem.rdchem.BondType.DOUBLE, Chem.rdchem.BondType.TRIPLE, Chem.rdchem.BondType.AROMATIC]) if x == d['b_type']]
+    elif e_representation == 'raw_distance':
+      if d['b_type'] is None:
+        remove_edges += [(n1, n2)]
+      else:
+        e_t.append(d['distance'])
+        e_t += [int(d['b_type'] == x) for x in [Chem.rdchem.BondType.SINGLE, Chem.rdchem.BondType.DOUBLE, Chem.rdchem.BondType.TRIPLE, Chem.rdchem.BondType.AROMATIC]]
+    else:
+      print('Incorrect Edge representation transform')
+      quit()
+    if e_t:
+      e[(n1, n2)] = e_t
+  for edg in remove_edges:
+    g.remove_edge(*edg)
+  return nx.to_numpy_matrix(g), e
+
 
 if __name__ == '__main__':
   import argparse
@@ -116,7 +185,9 @@ if __name__ == '__main__':
   parser.add_argument('--path', '-p', nargs=1, help='Specify the path of XYZ file')
 
   args = parser.parse_args()
-  g, l = xyz_graph_decoder(args.path[0])
-  print(type(g))
-  print(l)
+  g, h, e, l = xyz_graph_decoder(args.path[0])
+  print("Adjacency matrix: \n", g)
+  print("Node embedding: \n", h)
+  print("Edge: \n", e)
+  print("Label: \n", l)
   
