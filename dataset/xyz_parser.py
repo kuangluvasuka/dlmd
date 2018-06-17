@@ -1,6 +1,10 @@
-#
-#
-##########################################
+# -*- coding: utf-8 -*-
+
+"""
+    xyz_parser.py: Functions to preprocess dataset.
+
+"""
+
 import os
 import networkx as nx
 import numpy as np
@@ -190,4 +194,3 @@ if __name__ == '__main__':
   print("Node embedding: \n", h)
   print("Edge: \n", e)
   print("Label: \n", l)
-  

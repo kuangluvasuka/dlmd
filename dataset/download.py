@@ -1,10 +1,14 @@
-#
-#
-#
-#
-#
-#
-##################################################################
+# -*- coding: utf-8 -*-
+
+"""
+    download.py: Download QM9 dataset and preprocess it into 'qm9.bin' for training.
+    
+    Usage:
+        $ cd <dir_to_download.py>
+        $ python download.py [-p dir]
+
+"""
+
 import os
 import argparse
 import wget
@@ -12,9 +16,7 @@ import tempfile
 import tarfile
 import numpy as np
 import networkx as nx
-from ase.io.extxyz import read_xyz
-from ase.units import Hartree, eV, Bohr, Ang
-from ase.neighborlist import NeighborList
+import pickle
 
 from utils.logger import log
 from xyz_parser import xyz_graph_decoder
@@ -85,16 +87,32 @@ def load_qm9(data_dir):
     log.info("Extraction complete.")
 
   log.info("Parsing XYZ files...")
-  #parse_xyz(temp)#, dbpath)
-  for i, xyzfile in enumerate(os.listdir(temp)):
-    xyzfile = os.path.join(temp, xyzfile)
-    g, l = xyz_graph_decoder(xyzfile)
+  with open('qm9.bin', 'wb') as f:
+    data = {}
+    g = []
+    h = []
+    e = []
+    l = []
+    for i, xyzfile in enumerate(os.listdir(temp)):
+      xyzfile = os.path.join(temp, xyzfile)
+      gg, hh, ee, ll = xyz_graph_decoder(xyzfile)
+      g.append(gg)
+      h.append(hh)
+      e.append(ee)
+      l.append(ll)
 
+      if i % 10000 == 0:
+        log.info(str(i) + "/133885 parsed..")
+    data['adjacency'] = g
+    data['node'] = h
+    data['edge'] = e
+    data['label'] = l
 
+    pickle.dump(data, f)
+  log.info("Dataset saved in file \'qm9.bin\', DONE!")
 
-
-  log.info("All XYZ files parsed.")
-  #os.removedirs(temp)
+  #with open('qm9.bin', 'rb') as f:
+  #  d = pickle.load(f)
 
 
 if __name__ == '__main__':
