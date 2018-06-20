@@ -1,0 +1,5 @@
+.vscode/
+dataset/__pycache__/
+dataset/qm9.bin
+dataset/qm9/
+
