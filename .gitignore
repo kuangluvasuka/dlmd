@@ -2,4 +2,11 @@
 dataset/__pycache__/
 dataset/qm9.bin
 dataset/qm9/
+DLMD.egg-info/
+dist/
+build/
+dataset/qm9.tfrecords
+utils/__pycache__/
+
+
 
