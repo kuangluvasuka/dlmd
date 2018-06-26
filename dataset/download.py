@@ -12,10 +12,10 @@
 import os
 import argparse
 import wget
-import tempfile
 import tarfile
+import glob
 import numpy as np
-import networkx as nx
+import tensorflow as tf
 import pickle
 
 from utils.logger import log
@@ -27,43 +27,14 @@ def download_qm9(url, file):
     return
   wget.download(url, out=file)
 
-def parse_xyz(tmp_dir):#, dbpath):
-  prop_names = ['rcA', 'rcB', 'rcC', 'mu', 'alpha', 'homo', 'lumo',
-                'gap', 'r2', 'zpve', 'energy_U0', 'energy_U', 'enthalpy_H',
-                'free_G', 'Cv']
-  conversions = [1., 1., 1., 1., Bohr ** 3 / Ang ** 3,
-                 Hartree / eV, Hartree / eV, Hartree / eV,
-                 Bohr ** 2 / Ang ** 2, Hartree / eV,
-                 Hartree / eV, Hartree / eV, Hartree / eV,
-                 Hartree / eV, 1.]
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-  for i, xyzfile in enumerate(os.listdir(tmp_dir)):
-    xyzfile = os.path.join(tmp_dir, xyzfile)
+def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
-    if i % 10000 == 0:
-      log.info(str(i) + "/133885 parsed.")
-    #if i == 500:
-    #  break
-    properties = {}
-    tmp = os.path.join(tmp_dir, 'tmp.xyz')
-    with open(xyzfile, 'r') as f:
-      lines = f.readlines()
-      l = lines[1].split()[2:]
-      for pn, p, c in zip(prop_names, l, conversions):
-        properties[pn] = float(p) * c
-      with open(tmp, 'wt') as fout:
-        for line in lines:
-          fout.write(line.replace('*^', 'e'))
-
-    with open(tmp, 'r') as f:
-      atoms = list(read_xyz(f, 0))[0]
-    
-    idx_ik, seg_i, idx_j, idx_jk, seg_j, offset, ratio_j = collect_neighbors(atoms, 20.)
-
-    data = {'_idx_ik': idx_ik, '_idx_jk': idx_jk, '_idx_j': idx_j,
-            '_seg_i': seg_i, '_seg_j': seg_j, '_offset': offset,
-            '_ratio_j': ratio_j}
-
+def _float_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 def load_qm9(data_dir):
   log.info("Downloading GDB-9 datasets...")
@@ -74,7 +45,6 @@ def load_qm9(data_dir):
   raw_file = os.path.join(data_dir, 'dsgdb9nsd.xyz.tar.bz2')
   download_qm9(url, raw_file)
 
-  #temp = tempfile.mkdtemp('dsgdb9nsd')
   temp = os.path.join(data_dir, 'dsgdb9nsd')
   if os.path.exists(temp):
     log.infov("Found existing QM9 xyz files at {}, SKIP Extraction!".format(temp))
@@ -87,32 +57,25 @@ def load_qm9(data_dir):
     log.info("Extraction complete.")
 
   log.info("Parsing XYZ files...")
-  with open('qm9.bin', 'wb') as f:
-    data = {}
-    g = []
-    h = []
-    e = []
-    l = []
-    for i, xyzfile in enumerate(os.listdir(temp)):
-      xyzfile = os.path.join(temp, xyzfile)
-      gg, hh, ee, ll = xyz_graph_decoder(xyzfile)
-      g.append(gg)
-      h.append(hh)
-      e.append(ee)
-      l.append(ll)
+  writer = tf.python_io.TFRecordWriter('qm9.tfrecords')
+  xyzs = glob.glob(os.path.join(temp, '*.xyz'))
+  for xyz in xyzs[:1]:
+    g, h, e, l = xyz_graph_decoder(xyz)
+    g = np.array(g)
+    h = np.array(h)
+    # TODO: reformat edge representation
+    #e = 
 
-      if i % 10000 == 0:
-        log.info(str(i) + "/133885 parsed..")
-    data['adjacency'] = g
-    data['node'] = h
-    data['edge'] = e
-    data['label'] = l
+    l = np.array(l)
+    feature = {'l': _bytes_feature(l.tostring()),
+               'g': _bytes_feature(g.tostring()),
+               'h': _bytes_feature(h.tostring()),
+               'e': _bytes_feature(e)}
+    example = tf.train.Example(features=tf.train.Features(feature=feature))
+    writer.write(example.SerializeToString())
+  writer.close()
 
-    pickle.dump(data, f)
-  log.info("Dataset saved in file \'qm9.bin\', DONE!")
-
-  #with open('qm9.bin', 'rb') as f:
-  #  d = pickle.load(f)
+log.info("Dataset saved in file \'qm9.tfrecords\', DONE!")
 
 
 if __name__ == '__main__':

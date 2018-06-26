@@ -179,6 +179,11 @@ def _qm9_edges(g, e_representation='raw_distance'):
       e[(n1, n2)] = e_t
   for edg in remove_edges:
     g.remove_edge(*edg)
+
+  # TODO: reformat edge representation
+
+
+  
   return nx.to_numpy_matrix(g), e
 
 
@@ -192,5 +197,5 @@ if __name__ == '__main__':
   g, h, e, l = xyz_graph_decoder(args.path[0])
   print("Adjacency matrix: \n", g)
   print("Node embedding: \n", h)
-  print("Edge: \n", e)
+  print("Edge: \n", e.tostring())
   print("Label: \n", l)
