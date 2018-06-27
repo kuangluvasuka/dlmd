@@ -56,21 +56,20 @@ def load_qm9(data_dir):
     tar.close()
     log.info("Extraction complete.")
 
-  log.info("Parsing XYZ files...")
+  log.info("Parsing XYZ files and streaming parsed features to dataset ..")
   writer = tf.python_io.TFRecordWriter('qm9.tfrecords')
   xyzs = glob.glob(os.path.join(temp, '*.xyz'))
-  for xyz in xyzs[:1]:
+  for i, xyz in enumerate(xyzs):
+    if i % 10000 == 0:
+      log.info(str(i) + '/133885 saved..')
     g, h, e, l = xyz_graph_decoder(xyz)
     g = np.array(g)
     h = np.array(h)
-    # TODO: reformat edge representation
-    #e = 
-
     l = np.array(l)
     feature = {'l': _bytes_feature(l.tostring()),
                'g': _bytes_feature(g.tostring()),
                'h': _bytes_feature(h.tostring()),
-               'e': _bytes_feature(e)}
+               'e': _bytes_feature(e.tostring())}
     example = tf.train.Example(features=tf.train.Features(feature=feature))
     writer.write(example.SerializeToString())
   writer.close()
