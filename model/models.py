@@ -17,13 +17,10 @@ class Model(object):
     """
 
     self.params = params
-    self._init_graph()
   
   def _fprop(self, *args, **kwargs):
     raise NotImplementedError("Subclass must define _fprop() method.")
 
-  def _init_graph(self):
-    raise NotImplementedError("Subclass must define _init_graph() method.")
 
 
 class MessageFunction(Model):
@@ -32,13 +29,13 @@ class MessageFunction(Model):
   def __init__(self, params):
     super(MessageFunction).__init__(params)
     self._select_function(self.params.message_function)
+    self._init_graph()
   
   def _init_graph(self):
     """Construct learnable variables matrix_in and matrix out.
     
-    This function is called in base Model's constructor, so every
-    MessageFunction object will generate it's own learnable variables
-    once instantiated.
+    This function is called in constructor, so every MessageFunction 
+    object will generate it's own learnable variables once instantiated.
     """
 
     self._matrix_in = tf.get_variable(
