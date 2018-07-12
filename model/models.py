@@ -82,12 +82,11 @@ class MessageFunction(Model):
     """
 
     num_nodes = adj_mat.shape[1]
+    batch_size = adj_mat.shape[0]
     
     #TODO: Need to figure out the matrix operations 
     a_in = tf.gather(self._matrix_in, adj_mat)
     a_out = tf.gather(self._matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
-    #tf.Print()
-    #tf.Assert()
 
     a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
     a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
@@ -103,12 +102,19 @@ class MessageFunction(Model):
       node_state,
       shape=[-1, self.params.node_dim * num_nodes, 1])
 
-    a_in_mult = tf.matmul(a_in_flat, h_flat)
-    a_out_mult = tf.matmul(a_out_flat, h_flat)
-    #tf.Assert()
+    a_in_mult = tf.reshape(
+      tf.matmul(a_in_flat, h_flat), 
+      shape=[batch_size * num_nodes, self.params.node_dim])
+    a_out_mult = tf.reshape(
+      tf.matmul(a_out_flat, h_flat),
+      shape=[batch_size * num_nodes, self.params.node_dim])
 
+    a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
 
-    return a_in_mult
+    a_v = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
+    #a_v = tf.Print(a_v, [a_v.shape], "Shape of message tensor is: ")
+
+    return a_v
 
 
 

@@ -93,7 +93,7 @@ if __name__ == '__main__':
 
   m = model._fprop(node_input, adj)
   sess.run(tf.global_variables_initializer())
-  print(sess.run(tf.shape(m)))
+  sess.run(m)
 
 
 
