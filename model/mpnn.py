@@ -5,7 +5,7 @@ Message Passing Neural Network (MPNN) for quantum molecular simulation training.
 
 import tensorflow as tf
 
-from model import models
+import models
 from utils.logger import log
 
 
@@ -30,6 +30,8 @@ class MPNN(models.Model):
       epoch=10,
       prop_step = 6,
       #TODO: more hps
+      num_edge_class=5,
+      non_edge=False,
       message_function='mpnn',
       update_function='',
       readout_function=''
@@ -58,6 +60,9 @@ class MPNN(models.Model):
       else:
         message = self.m_function[t]._fprop(node_state, adj_mat)
         tf.Print(message, [message])
+    
+    #TODO: need to add return value
+    return message
 
 
 
@@ -81,10 +86,14 @@ if __name__ == '__main__':
   config = tf.ConfigProto()
   config.gpu_options.allow_growth = True
   sess = tf.Session(config=config)
-  sess.run(tf.global_variables_initializer())
   sess.run(iterator.initializer)
   node_input, adj = next_elem
-  sess.run(model._fprop(node_input, adj))
+  node_input = tf.reshape(node_input, [batch_size, num_nodes, node_dim])
+  adj = tf.reshape(adj, [batch_size, num_nodes, num_nodes])
+
+  m = model._fprop(node_input, adj)
+  sess.run(tf.global_variables_initializer())
+  print(sess.run(tf.shape(m)))
 
 
 

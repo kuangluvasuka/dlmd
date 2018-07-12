@@ -27,9 +27,10 @@ class MessageFunction(Model):
   """Message function class"""
 
   def __init__(self, params):
-    super(MessageFunction).__init__(params)
+    super(MessageFunction, self).__init__(params)
     self._select_function(self.params.message_function)
-    self._init_graph()
+    self.init_graph = tf.make_template(self.__class__.__name__, self._init_graph)
+    self.init_graph()
   
   def _init_graph(self):
     """Construct learnable variables matrix_in and matrix out.
@@ -39,7 +40,7 @@ class MessageFunction(Model):
     """
 
     self._matrix_in = tf.get_variable(
-      'matrix_weights_in'
+      'matrix_weights_in',
       shape=[self.params.num_edge_class, self.params.node_dim, self.params.node_dim])
     self._matrix_out = tf.get_variable(
       'matrix_weight_out',
@@ -47,17 +48,14 @@ class MessageFunction(Model):
     #tf.Print(self._matrix_out, [self._matrix_out])
 
     #TODO: Add variables for Non-bounding connection
-    if params.non_edge:
+    if self.params.non_edge:
       pass
 
-  def _select_function(self, key, *args):
-    """
-    """
-    
+  def _select_function(self, *args):
     self._function = {
       'mpnn': self._mpnn
 
-    }.get(key)
+    }.get(self.params.message_function)
 
   def _fprop(
     self, 
@@ -83,19 +81,34 @@ class MessageFunction(Model):
     """ 
     """
 
+    num_nodes = adj_mat.shape[1]
+    
     #TODO: Need to figure out the matrix operations 
     a_in = tf.gather(self._matrix_in, adj_mat)
     a_out = tf.gather(self._matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
     #tf.Print()
     #tf.Assert()
 
-    a_in = tf.matmul(node_state, a_in)
-    a_out = tf.matmul(node_state, a_out)
+    a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
+    a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
+
+    a_in_flat = tf.reshape(
+      a_in,
+      shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes])
+    a_out_flat = tf.reshape(
+      a_out,
+      shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes])
+
+    h_flat = tf.reshape(
+      node_state,
+      shape=[-1, self.params.node_dim * num_nodes, 1])
+
+    a_in_mult = tf.matmul(a_in_flat, h_flat)
+    a_out_mult = tf.matmul(a_out_flat, h_flat)
     #tf.Assert()
 
-    #a_in = tf.transpose
 
-
+    return a_in_mult
 
 
 
