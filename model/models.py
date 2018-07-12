@@ -46,6 +46,7 @@ class MessageFunction(Model):
       'matrix_weight_out',
       shape=[self.params.num_edge_class, self.params.node_dim, self.params.node_dim])
     #tf.Print(self._matrix_out, [self._matrix_out])
+    self._bias = tf.get_variable('bias', shape=2 * self.params.node_dim)
 
     #TODO: Add variables for Non-bounding connection
     if self.params.non_edge:
@@ -83,11 +84,10 @@ class MessageFunction(Model):
 
     num_nodes = adj_mat.shape[1]
     batch_size = adj_mat.shape[0]
-    
+
     #TODO: Need to figure out the matrix operations 
     a_in = tf.gather(self._matrix_in, adj_mat)
     a_out = tf.gather(self._matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
-
     a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
     a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
 
@@ -97,22 +97,21 @@ class MessageFunction(Model):
     a_out_flat = tf.reshape(
       a_out,
       shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes])
-
     h_flat = tf.reshape(
       node_state,
       shape=[-1, self.params.node_dim * num_nodes, 1])
 
     a_in_mult = tf.reshape(
-      tf.matmul(a_in_flat, h_flat), 
+      tf.matmul(a_in_flat, h_flat, name='a_in_mult'), 
       shape=[batch_size * num_nodes, self.params.node_dim])
     a_out_mult = tf.reshape(
-      tf.matmul(a_out_flat, h_flat),
+      tf.matmul(a_out_flat, h_flat, name='a_out_mult'),
       shape=[batch_size * num_nodes, self.params.node_dim])
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
-
     a_v = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
-    #a_v = tf.Print(a_v, [a_v.shape], "Shape of message tensor is: ")
+    a_v = tf.nn.bias_add(a_v, self._bias, name='bias_add')
+    #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
 
     return a_v
 
