@@ -76,7 +76,7 @@ class MessageFunction(Model):
     
     #tf.Assert(self._a_in, adj_mat)
 
-    return self._function(node_state, adj_mat
+    return self._function(node_state, adj_mat)
 
   def _ggnn(self, node_state, adj_mat):
     """Gated Graph Neural Network for message passing.
