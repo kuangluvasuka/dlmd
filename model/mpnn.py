@@ -32,8 +32,8 @@ class MPNN(models.Model):
       #TODO: more hps
       num_edge_class=5,
       non_edge=False,
-      message_function='mpnn',
-      update_function='',
+      message_function='ggnn',
+      update_function='GRU',
       readout_function=''
 
     )

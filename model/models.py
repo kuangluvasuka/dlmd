@@ -28,7 +28,7 @@ class MessageFunction(Model):
 
   def __init__(self, params):
     super(MessageFunction, self).__init__(params)
-    self._select_function(self.params.message_function)
+    self._select_function()
     self.init_graph = tf.make_template(self.__class__.__name__, self._init_graph)
     self.init_graph()
   
@@ -52,9 +52,9 @@ class MessageFunction(Model):
     if self.params.non_edge:
       pass
 
-  def _select_function(self, *args):
+  def _select_function(self):
     self._function = {
-      'mpnn': self._mpnn
+      'ggnn': self._ggnn
 
     }.get(self.params.message_function)
 
@@ -76,16 +76,25 @@ class MessageFunction(Model):
     
     #tf.Assert(self._a_in, adj_mat)
 
-    return self._function(node_state, adj_mat)
+    return self._function(node_state, adj_mat
 
-  def _mpnn(self, node_state, adj_mat):
-    """ 
+  def _ggnn(self, node_state, adj_mat):
+    """Gated Graph Neural Network for message passing.
+    This function implements the Eq.(2) in Li's paper 
+    https://arxiv.org/pdf/1511.05493.pdf.
+
+    Args:
+      node_state (tf.float32): [batch_size, num_nodes, node_dim]
+      adj_mat (tf.int32): [batch_size, num_nodes, num_nodes]
+    
+    Return:
+      message (tf.float32): the message activation through edges 
+                        [batch_size, num_nodes, 2 * node_dim]
     """
 
     num_nodes = adj_mat.shape[1]
     batch_size = adj_mat.shape[0]
 
-    #TODO: Need to figure out the matrix operations 
     a_in = tf.gather(self._matrix_in, adj_mat)
     a_out = tf.gather(self._matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
     a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
@@ -109,14 +118,11 @@ class MessageFunction(Model):
       shape=[batch_size * num_nodes, self.params.node_dim])
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
-    a_v = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
-    a_v = tf.nn.bias_add(a_v, self._bias, name='bias_add')
+    message = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
+    message = tf.nn.bias_add(a_v, self._bias, name='bias_add')
     #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
 
-    return a_v
-
-
-
+    return message
 
 
 class UpdateFunction(Model):
