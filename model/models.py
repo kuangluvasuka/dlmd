@@ -39,14 +39,14 @@ class MessageFunction(Model):
     object will generate it's own learnable variables once instantiated.
     """
 
-    self._matrix_in = tf.get_variable(
+    self.matrix_in = tf.get_variable(
       'matrix_weights_in',
       shape=[self.params.num_edge_class, self.params.node_dim, self.params.node_dim])
-    self._matrix_out = tf.get_variable(
+    self.matrix_out = tf.get_variable(
       'matrix_weight_out',
       shape=[self.params.num_edge_class, self.params.node_dim, self.params.node_dim])
     #tf.Print(self._matrix_out, [self._matrix_out])
-    self._bias = tf.get_variable('bias', shape=2 * self.params.node_dim)
+    self.bias = tf.get_variable('bias', shape=2 * self.params.node_dim)
 
     #TODO: Add variables for Non-bounding connection
     if self.params.non_edge:
@@ -95,8 +95,8 @@ class MessageFunction(Model):
     num_nodes = adj_mat.shape[1]
     batch_size = adj_mat.shape[0]
 
-    a_in = tf.gather(self._matrix_in, adj_mat)
-    a_out = tf.gather(self._matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
+    a_in = tf.gather(self.matrix_in, adj_mat)
+    a_out = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
     a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
     a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
 
@@ -119,14 +119,49 @@ class MessageFunction(Model):
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
     message = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
-    message = tf.nn.bias_add(a_v, self._bias, name='bias_add')
+    message = tf.nn.bias_add(a_v, self.bias, name='bias_add')
     #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
 
     return message
 
 
 class UpdateFunction(Model):
-  pass
+  def __init__(self, params):
+    super(UpdateFunction, self).__init__(params)
+    self._select_function()
+    self._init_graph
+  
+  def _init_graph(self):
+    """Construct learnable variables for update function.
+    Here, I only implement the GRU-like module which is describe in Li's paper
+    
+    Variables:
+      w_z, u_z for Eq.(3): z_v^{t} = sig(w_z * a_v^{t} + u_z * h_v^{t-1})
+      w_r, u_r for Eq.(4): r_v^{t} = sig(w_r * a_v^{t} + u_r * h_v^{t-1})
+      w, u for Eq.(5):     h~v^{t} = tanh(w * a_v^{t} + u * (r_v^{t} 0 h_v^{t-1}))
+
+      And Eq.(6):          h_v^{t} = (1 - z_v{t}) 0 h_v^{t-1} + z_v^{t} 0 h~v^{t}
+    """
+
+    self.w_z = tf.get_variable('w_z', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u_z = tf.get_variable('u_z', shape=[self.params.node_dim, self.params.node_dim])
+    self.w_r = tf.get_variable('w_r', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u_r = tf.get_variable('u_r', shape=[self.params.node_dim, self.params.node_dim])
+    self.w = tf.get_variable('w', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u = tf.get_variable('u', shape=[self.params.node_dim, self.params.node_dim])
+
+  def _select_function(self):
+    self._function = {
+      'GRU':  self._gru
+
+    }.get(self.params.update_function)
+
+  def _fprop(self):
+    return self._function()
+
+  def _gru(self):
+    """ """
+    pass
 
 
 class ReadoutFunction(Model):
