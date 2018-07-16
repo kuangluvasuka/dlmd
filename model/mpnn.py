@@ -44,24 +44,27 @@ class MPNN(models.Model):
     if params.message_function == 'mpnn':
       self._m_class = models.MessageFunction
 
-  def _fprop(self, node_state, adj_mat, reuse_graph_tensor=False):
-    """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
-    """
+    self._init_graph()
 
+  def _init_graph(self, reuse_graph_tensor=False):
     if reuse_graph_tensor:
       self.m_function = self._m_class(self.params)
     else:
       self.m_function = [self._m_class(self.params) for _ in range(self.params.prop_step)]
 
+  def _fprop(self, input_node, adj_mat, reuse_graph_tensor=False):
+    """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
+    """
+
+    h_t = input_node
     for t in range(self.params.prop_step):
       if reuse_graph_tensor:
-        message = self.m_function._fprop(node_state, adj_mat)
+        message = self.m_function._fprop(h_t, adj_mat)
         tf.Print(message, [message])
       else:
-        message = self.m_function[t]._fprop(node_state, adj_mat)
+        message = self.m_function[t]._fprop(h_t, adj_mat)
         tf.Print(message, [message])
     
-    #TODO: need to add return value
     return message
 
 

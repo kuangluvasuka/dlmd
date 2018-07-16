@@ -176,7 +176,7 @@ class UpdateFunction(Model):
       tf.matmul(message, self.w_r) + tf.matmul(node_state, self.u_r), name='r_t')
     h_tilda = tf.tanh(
       tf.matmul(message, self.w) + tf.matmul(tf.multiply(r, node_state), self.u), name='h_tilda_t')
-    h_t = tf.multiply(1 - z, node_state) + tf.multiply(z, h_tilda)
+    h_t = tf.add(tf.multiply(1 - z, node_state), tf.multiply(z, h_tilda), name='h_t')
 
     return h_t
 
