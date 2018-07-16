@@ -129,7 +129,7 @@ class UpdateFunction(Model):
   def __init__(self, params):
     super(UpdateFunction, self).__init__(params)
     self._select_function()
-    self._init_graph
+    self._init_graph()
   
   def _init_graph(self):
     """Construct learnable variables for update function.
@@ -156,12 +156,29 @@ class UpdateFunction(Model):
 
     }.get(self.params.update_function)
 
-  def _fprop(self):
-    return self._function()
+  def _fprop(self, node_state, message):
+    return self._function(node_state, message)
 
-  def _gru(self):
-    """ """
-    pass
+  def _gru(self, node_state, message):
+    """Gated Recurrent Units (Cho et al., 2014)
+    
+    Args:
+      node_state:
+      message (tf.float32): [batch_size, num_nodes, 2 * node_dim]
+
+    Return new node_state:
+      h_t: [batch_size, num_nodes, node_dim]
+    """
+
+    z = tf.sigmoid(
+      tf.matmul(message, self.w_z) + tf.matmul(node_state, self.u_z), name='z_t')
+    r = tf.sigmoid(
+      tf.matmul(message, self.w_r) + tf.matmul(node_state, self.u_r), name='r_t')
+    h_tilda = tf.tanh(
+      tf.matmul(message, self.w) + tf.matmul(tf.multiply(r, node_state), self.u), name='h_tilda_t')
+    h_t = tf.multiply(1 - z, node_state) + tf.multiply(z, h_tilda)
+
+    return h_t
 
 
 class ReadoutFunction(Model):
