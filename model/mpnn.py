@@ -62,13 +62,12 @@ class MPNN(models.Model):
     for t in range(self.params.prop_step):
       if reuse_graph_tensor:
         message = self.m_function.fprop(h_t, adj_mat)
-        tf.Print(message, [message])
         h_t = self.u_function.fprop(h_t, message)
       else:
         message = self.m_function[t].fprop(h_t, adj_mat)
-        tf.Print(message, [message])
         h_t = self.u_function[t].fprop(h_t, message)
     
+    message = tf.Print(message, [h_t.shape], 'Returned message is: ')
     return message
 
 
@@ -98,7 +97,7 @@ if __name__ == '__main__':
   node_input = tf.reshape(node_input, [batch_size, num_nodes, node_dim])
   adj = tf.reshape(adj, [batch_size, num_nodes, num_nodes])
 
-  m = model._fprop(node_input, adj)
+  m = model.fprop(node_input, adj)
   sess.run(tf.global_variables_initializer())
   sess.run(m)
 

@@ -47,7 +47,6 @@ class MessageFunction(Model):
     self.matrix_out = tf.get_variable(
       'matrix_weight_out',
       shape=[self.params.num_edge_class, self.params.node_dim, self.params.node_dim])
-    #tf.Print(self._matrix_out, [self._matrix_out])
     self.bias = tf.get_variable('bias', shape=2 * self.params.node_dim)
 
     #TODO: Add variables for Non-bounding connection
@@ -121,7 +120,7 @@ class MessageFunction(Model):
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
     message = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
-    message = tf.nn.bias_add(a_v, self.bias, name='bias_add')
+    message = tf.nn.bias_add(message, self.bias, name='bias_add')
     #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
 
     return message
@@ -165,22 +164,28 @@ class UpdateFunction(Model):
     """Gated Recurrent Units (Cho et al., 2014)
     
     Args:
-      node_state:
+      node_state (tf.float32): [batch_size, num_nodes, node_dim]
       message (tf.float32): [batch_size, num_nodes, 2 * node_dim]
 
     Return new node_state:
-      h_t: [batch_size, num_nodes, node_dim]
+      h_t_rs: [batch_size, num_nodes, node_dim]
     """
 
-    z = tf.sigmoid(
-      tf.matmul(message, self.w_z) + tf.matmul(node_state, self.u_z), name='z_t')
-    r = tf.sigmoid(
-      tf.matmul(message, self.w_r) + tf.matmul(node_state, self.u_r), name='r_t')
-    h_tilda = tf.tanh(
-      tf.matmul(message, self.w) + tf.matmul(tf.multiply(r, node_state), self.u), name='h_tilda_t')
-    h_t = tf.add(tf.multiply(1 - z, node_state), tf.multiply(z, h_tilda), name='h_t')
+    batch_size = node_state.shape[0]
+    num_nodes = node_state.shape[1]
+    h_rs = tf.reshape(node_state, shape=[batch_size * num_nodes, -1], name='gru_h_rs')
+    m_rs = tf.reshape(message, shape=[batch_size * num_nodes, -1], name='gru_m_rs')
 
-    return h_t
+    z = tf.sigmoid(
+      tf.matmul(m_rs, self.w_z) + tf.matmul(h_rs, self.u_z), name='gru_z_t')
+    r = tf.sigmoid(
+      tf.matmul(m_rs, self.w_r) + tf.matmul(h_rs, self.u_r), name='gru_r_t')
+    h_tilda = tf.tanh(
+      tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r, h_rs), self.u), name='gru_h_tilda')
+    h_t = tf.add(tf.multiply(1 - z, h_rs), tf.multiply(z, h_tilda), name='gru_h_t')
+    h_t_rs = tf.reshape(h_t, shape=[batch_size, num_nodes, -1], name='gru_h_t_rs')
+
+    return h_t_rs
 
 
 class ReadoutFunction(Model):
