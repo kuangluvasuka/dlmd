@@ -18,8 +18,8 @@ class Model(object):
 
     self.params = params
   
-  def _fprop(self, *args, **kwargs):
-    raise NotImplementedError("Subclass must define _fprop() method.")
+  def fprop(self, *args, **kwargs):
+    raise NotImplementedError("Subclass must define fprop() method.")
 
 
 
@@ -58,7 +58,7 @@ class MessageFunction(Model):
 
     }.get(self.params.message_function)
 
-  def _fprop(
+  def fprop(
     self, 
     node_state,
     adj_mat,
@@ -156,7 +156,7 @@ class UpdateFunction(Model):
 
     }.get(self.params.update_function)
 
-  def _fprop(self, node_state, message):
+  def fprop(self, node_state, message):
     return self._function(node_state, message)
 
   def _gru(self, node_state, message):

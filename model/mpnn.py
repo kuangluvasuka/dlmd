@@ -55,18 +55,18 @@ class MPNN(models.Model):
       self.m_function = [self._m_class(self.params) for _ in range(self.params.prop_step)]
       self.u_function = [self._u_class(self.params) for _ in range(self.params.prop_step)]
 
-  def _fprop(self, input_node, adj_mat, reuse_graph_tensor=False):
+  def fprop(self, input_node, adj_mat, reuse_graph_tensor=False):
     """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
     """
 
     h_t = input_node
     for t in range(self.params.prop_step):
       if reuse_graph_tensor:
-        message = self.m_function._fprop(h_t, adj_mat)
+        message = self.m_function.fprop(h_t, adj_mat)
         tf.Print(message, [message])
         h_t = self.u_function.fprop(h_t, message)
       else:
-        message = self.m_function[t]._fprop(h_t, adj_mat)
+        message = self.m_function[t].fprop(h_t, adj_mat)
         tf.Print(message, [message])
         h_t = self.u_function[t].fprop(h_t, message)
     
