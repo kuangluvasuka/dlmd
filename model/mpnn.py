@@ -44,8 +44,7 @@ class MPNN(models.Model):
     self._m_class = models.MessageFunction
     self._u_class = models.UpdateFunction
     
-
-    self._init_graph()
+    self.init_graph()
 
   def _init_graph(self, reuse_graph_tensor=False):
     if reuse_graph_tensor:

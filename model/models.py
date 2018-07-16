@@ -17,10 +17,13 @@ class Model(object):
     """
 
     self.params = params
+    self.init_graph = tf.make_template(self.__class__.__name__, self._init_graph)
   
   def fprop(self, *args, **kwargs):
     raise NotImplementedError("Subclass must define fprop() method.")
 
+  def _init_graph(self):
+    raise NotImplementedError("Subclass must define _init_graph() method.")
 
 
 class MessageFunction(Model):
@@ -29,7 +32,6 @@ class MessageFunction(Model):
   def __init__(self, params):
     super(MessageFunction, self).__init__(params)
     self._select_function()
-    self.init_graph = tf.make_template(self.__class__.__name__, self._init_graph)
     self.init_graph()
   
   def _init_graph(self):
@@ -129,7 +131,7 @@ class UpdateFunction(Model):
   def __init__(self, params):
     super(UpdateFunction, self).__init__(params)
     self._select_function()
-    self._init_graph()
+    self.init_graph()
   
   def _init_graph(self):
     """Construct learnable variables for update function.
