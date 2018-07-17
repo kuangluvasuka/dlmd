@@ -200,7 +200,7 @@ class ReadoutFunction(Model):
 
   def _select_function(self):
     self._function = {
-      'graph_level' = self._graph_level
+      'graph_level': self._graph_level
 
     }.get(self.params.readout_function)
   
