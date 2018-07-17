@@ -29,12 +29,13 @@ class MPNN(models.Model):
       edge_dim=50,
       epoch=10,
       prop_step = 6,
+      output_dim = 12,
       #TODO: more hps
       num_edge_class=5,
       non_edge=False,
       message_function='ggnn',
       update_function='GRU',
-      readout_function=''
+      readout_function='graph_level'
 
     )
 
@@ -43,6 +44,7 @@ class MPNN(models.Model):
     
     self._m_class = models.MessageFunction
     self._u_class = models.UpdateFunction
+    self._r_class = models.ReadoutFunction
     
     self.init_graph()
 
@@ -53,6 +55,8 @@ class MPNN(models.Model):
     else:
       self.m_function = [self._m_class(self.params) for _ in range(self.params.prop_step)]
       self.u_function = [self._u_class(self.params) for _ in range(self.params.prop_step)]
+    
+    self.r_function = self._r_class(self.params)
 
   def fprop(self, input_node, adj_mat, reuse_graph_tensor=False):
     """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
@@ -67,8 +71,9 @@ class MPNN(models.Model):
         message = self.m_function[t].fprop(h_t, adj_mat)
         h_t = self.u_function[t].fprop(h_t, message)
     
-    message = tf.Print(message, [h_t.shape], 'Returned message is: ')
-    return message
+    #message = tf.Print(message, [h_t.shape], 'Returned message is: ')
+    output = self.r_function.fprop(h_t, input_node)
+    return output
 
 
 

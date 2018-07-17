@@ -118,7 +118,7 @@ class MessageFunction(Model):
       tf.matmul(a_out_flat, h_flat, name='a_out_mult'),
       shape=[batch_size * num_nodes, self.params.node_dim])
 
-    a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='concat')
+    a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='ggnn_concat')
     message = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
     message = tf.nn.bias_add(message, self.bias, name='bias_add')
     #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
@@ -189,7 +189,48 @@ class UpdateFunction(Model):
 
 
 class ReadoutFunction(Model):
-  pass
+  def __init__(self, params):
+    super(ReadoutFunction, self).__init__(params)
+    self._select_function()
+    self.init_graph()
 
+  def _init_graph(self):
+    self.i = tf.get_variable('i', shape=[2 * self.params.node_dim, self.params.output_dim])
+    self.j = tf.get_variable('j', shape=[2 * self.params.node_dim, self.params.output_dim])
 
+  def _select_function(self):
+    self._function = {
+      'graph_level' = self._graph_level
+
+    }.get(self.params.readout_function)
+  
+  def fprop(self, hidden_node, input_node):
+    return self._function(hidden_node, input_node)
+
+  def _graph_level(self, hidden_node, input_node):
+    """Using the Graph-level output described in GG-NN paper
+    
+    Args:
+      hidden_node: [batch_size, num_nodes, node_dim]
+      input_node: [batch_size, num_nodes, node_dim]
+
+    Return:
+      output: [batch_size, output_dim]
+    """
+
+    num_nodes = input_node.shape[1]
+    batch_size = input_node.shape[0]
+
+    h_x = tf.reshape(
+      tf.concat([hidden_node, input_node], 2, name='graph_level_concat'),
+      shape=[batch_size * num_nodes, -1])
+    sigm = tf.sigmoid(tf.matmul(h_x, self.i))
+    tanh = tf.tanh(tf.matmul(h_x, self.j))
+    act = tf.reshape(
+      tf.multiply(sigm, tanh),
+      shape=[batch_size, num_nodes, -1])
+    reduce = tf.reduce_sum(act, axis=1)
+    output = tf.tanh(reduce)
+
+    return output
 
