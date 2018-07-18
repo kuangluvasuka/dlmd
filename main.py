@@ -44,7 +44,8 @@ def main():
   with tf.Session() as sess:
 
     sess.run(iterator.initializer)
-    g, h, e, l = sess.run(next_elet)
+    g, h, l = sess.run(next_elet)
+    log.infov(l.shape)
 
 
     # TODO: need to populate this framework
@@ -70,22 +71,25 @@ def main():
 
 
 def _parse_function(record):
-  features = {'l': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'g': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'h': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'e': tf.FixedLenFeature((), dtype=tf.string, default_value="")}
+  features = {'label': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
+              'adjacency': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
+              'node_state': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
+              'edge_state': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
+              'num_nodes': tf.FixedLenFeature((), dtype=tf.int64, default_value=0)}
   parsed = tf.parse_single_example(record, features)
-  l = tf.decode_raw(parsed['l'], tf.float64)
-  g = tf.decode_raw(parsed['g'], tf.float64)
-  h = tf.decode_raw(parsed['h'], tf.float64)
-  e = tf.decode_raw(parsed['e'], tf.float64)
+  l = tf.decode_raw(parsed['label'], tf.float64)
+  g = tf.decode_raw(parsed['adjacency'], tf.float64)
+  h = tf.decode_raw(parsed['node_state'], tf.float64)
+  e = tf.decode_raw(parsed['edge_state'], tf.float64)
+  num_nodes = tf.cast(parsed['num_nodes'], tf.int32)
 
   # TODO: add zero padding for data batching
+  g = tf.reshape(g, shape=[num_nodes, num_nodes])
+  # = tf.Print(g, [g], 'awleifyuhaskdfshfksahfuia')
+  h = tf.reshape(h, shape=[num_nodes, -1])
+  l = tf.reshape(l, shape=[12])
 
-  #g = tf.reshape(g, )
-  #h = tf.reshape(h, [19, 13])
-
-  return g, h, e, l
+  return g, h, l
 
 
 if __name__ == '__main__':

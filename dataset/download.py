@@ -66,10 +66,12 @@ def load_qm9(data_dir):
     g = np.array(g)
     h = np.array(h)
     l = np.array(l)
-    feature = {'l': _bytes_feature(l.tostring()),
-               'g': _bytes_feature(g.tostring()),
-               'h': _bytes_feature(h.tostring()),
-               'e': _bytes_feature(e.tostring())}
+    num_nodes = g.shape[0]
+    feature = {'label': _bytes_feature(l.tostring()),
+               'adjacency': _bytes_feature(g.tostring()),
+               'node_state': _bytes_feature(h.tostring()),
+               'edge_state': _bytes_feature(e.tostring()),
+               'num_nodes': _int64_feature(num_nodes)}
     example = tf.train.Example(features=tf.train.Features(feature=feature))
     writer.write(example.SerializeToString())
   writer.close()
