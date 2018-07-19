@@ -5,30 +5,28 @@ Train a neural network model on QM9 dataset.
 """
 
 import os
-import argparse
-
 import tensorflow as tf
 import numpy as np
 
 # Local modules
 from utils.logger import log
+from utils.config import get_args
 from model.mpnn import MPNN
 #from dataset import xyz_parser
 
-# parse arguments
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--datapath', default='./dataset/qm9.bin', help='Path to qm9.bin')
-parser.add_argument('--batch-size', default=100, help='Input batch size for training (default 100)')
 
 
 def main():
-  args = parser.parse_args()
 
-  datapath = args.datapath
+  try:
+    args = get_args()
 
-  # Create data loading stream
-  dataset = tf.data.TFRecordDataset('./dataset/qm9.tfrecords')
+  except:
+    log.error('Missing or invalid arguments.')
+    exit(0)
+
+  # Create data pipeline
+  dataset = tf.data.TFRecordDataset(args.datapath)
   dataset = dataset.map(_parse_function)
   dataset = dataset.padded_batch(2, padded_shapes=([30, 30], [30, 50]))
   iterator = dataset.make_initializable_iterator()
