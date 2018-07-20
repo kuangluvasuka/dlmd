@@ -20,6 +20,8 @@ class MPNN(models.Model):
     - node_dim: dimension of node_state, i.e. h_v
     - edge_dim: dimension of edge_state
     - prop_step: step limit for message propagation
+    - reuse_graph_tensor: use the same message and update weights in each propagation step
+    - output_dim: dimension of the vector valued output, i.e. y_hat
     """
 
     return tf.contrib.training.HParams(
@@ -27,17 +29,15 @@ class MPNN(models.Model):
       padded_num_nodes=30,
       node_dim=50,
       edge_dim=50,
-      epoch=10,
       prop_step = 6,
+      reuse_graph_tensor = False,
       output_dim = 12,
       #TODO: more hps
       num_edge_class=5,
       non_edge=False,
       message_function='ggnn',
       update_function='GRU',
-      readout_function='graph_level'
-
-    )
+      readout_function='graph_level')
 
   def __init__(self, params):
     super(MPNN, self).__init__(params)
@@ -48,8 +48,8 @@ class MPNN(models.Model):
     
     self.init_graph()
 
-  def _init_graph(self, reuse_graph_tensor=False):
-    if reuse_graph_tensor:
+  def _init_graph(self):
+    if self.params.reuse_graph_tensor:
       self.m_function = self._m_class(self.params)
       self.u_function = self._u_class(self.params)
     else:
@@ -58,13 +58,13 @@ class MPNN(models.Model):
     
     self.r_function = self._r_class(self.params)
 
-  def fprop(self, input_node, adj_mat, reuse_graph_tensor=False):
+  def fprop(self, input_node, adj_mat):
     """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
     """
 
     h_t = input_node
     for t in range(self.params.prop_step):
-      if reuse_graph_tensor:
+      if self.params.reuse_graph_tensor:
         message = self.m_function.fprop(h_t, adj_mat)
         h_t = self.u_function.fprop(h_t, message)
       else:

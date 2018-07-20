@@ -62,14 +62,12 @@ class MessageFunction(Model):
   def fprop(
     self, 
     node_state,
-    adj_mat,
-    reuse_graph_tensors=False):
+    adj_mat):
     """Compute a_v^t from h_v^{t-1}.
     
     Args:
       node_state (tf.float32): [batch_size, num_nodes, node_dim]
       adj_mat (tf.int32): [batch_size, num_nodes, num_nodes]
-      resule_graph_tensors (boolean):
     """
 
     #if not reuse_graph_tensors:
