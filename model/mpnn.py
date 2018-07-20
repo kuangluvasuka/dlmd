@@ -5,7 +5,7 @@ Message Passing Neural Network (MPNN) for quantum molecular simulation training.
 
 import tensorflow as tf
 
-import models
+from model import models
 from utils.logger import log
 
 
@@ -23,8 +23,8 @@ class MPNN(models.Model):
     """
 
     return tf.contrib.training.HParams(
-      batch_size=1,
-      padded_num_nodes=73,
+      batch_size=4,
+      padded_num_nodes=30,
       node_dim=50,
       edge_dim=50,
       epoch=10,
