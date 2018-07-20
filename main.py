@@ -9,6 +9,7 @@ import tensorflow as tf
 import numpy as np
 
 # Local modules
+from dataset.data_loader import DataLoader
 from utils.logger import log
 from utils.config import get_args
 from model.mpnn import MPNN
@@ -25,26 +26,22 @@ def main():
     log.error('Missing or invalid arguments.')
     exit(0)
 
-  # Create data pipeline
-  dataset = tf.data.TFRecordDataset(args.datapath)
-  dataset = dataset.map(_parse_function)
-  dataset = dataset.padded_batch(2, padded_shapes=([30, 30], [30, 50]))
-  iterator = dataset.make_initializable_iterator()
-  next_elet = iterator.get_next()
-
-
-  # Create model for training
+  # Initialize hyper parameters
   hparams = MPNN.default_hparams()
+
+  # Create data pipeline
+  data = DataLoader(args.datapath, hparams)
+
   model = MPNN(hparams)
 
 
 
   with tf.Session() as sess:
 
-    sess.run(iterator.initializer)
-    g, h = sess.run(next_elet)
-    #log.infov(sess.run(tf.shape(h)))
-    log.infov(type(h))
+    sess.run(data.iterator.initializer)
+    g, h, l = sess.run(data.next_elet)
+    log.infov(sess.run(tf.shape(g)))
+    log.infov(g)
 
 
 #    # TODO: need to populate this framework
@@ -67,28 +64,6 @@ def main():
 
 
 
-
-
-def _parse_function(record):
-  features = {'label': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'adjacency': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'node_state': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'edge_state': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
-              'num_nodes': tf.FixedLenFeature((), dtype=tf.int64, default_value=0)}
-  parsed = tf.parse_single_example(record, features)
-  l = tf.decode_raw(parsed['label'], tf.float64)
-  g = tf.decode_raw(parsed['adjacency'], tf.float64)
-  h = tf.decode_raw(parsed['node_state'], tf.float64)
-  e = tf.decode_raw(parsed['edge_state'], tf.float64)
-  num_nodes = tf.cast(parsed['num_nodes'], tf.int32)
-
-  # TODO: add zero padding for data batching
-  g = tf.reshape(g, shape=[num_nodes, num_nodes])
-  h = tf.reshape(h, shape=[num_nodes, -1])
-  l = tf.reshape(l, shape=[12])
-  #g = tf.Print(g, [tf.shape(g)], 'awleifyuhaskdfshfksahfuia')
-
-  return g, h
 
 
 if __name__ == '__main__':
