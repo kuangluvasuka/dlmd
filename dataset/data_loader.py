@@ -13,7 +13,7 @@ class DataLoader:
         [hparams.padded_num_nodes, hparams.node_dim],
         [None]))
     self.iterator = self.dataset.make_initializable_iterator()
-    self.next_elet = self.iterator.get_next()
+    #self.next_elet = self.iterator.get_next()
 
   def _parse_function(self, record):
     features = {'label': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
@@ -26,6 +26,9 @@ class DataLoader:
     g = tf.decode_raw(parsed['adjacency'], tf.float64)
     h = tf.decode_raw(parsed['node_state'], tf.float64)
     e = tf.decode_raw(parsed['edge_state'], tf.float64)
+    g = tf.cast(g, tf.int32)
+    h = tf.cast(h, tf.float32)
+    l = tf.cast(l, tf.float32)
     num_nodes = tf.cast(parsed['num_nodes'], tf.int32)
 
     g = tf.reshape(g, shape=[num_nodes, num_nodes])

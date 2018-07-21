@@ -91,9 +91,6 @@ class MessageFunction(Model):
                         [batch_size, num_nodes, 2 * node_dim]
     """
 
-    num_nodes = adj_mat.shape[1]
-    batch_size = adj_mat.shape[0]
-
     a_in = tf.gather(self.matrix_in, adj_mat)
     a_out = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
     a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
@@ -101,23 +98,23 @@ class MessageFunction(Model):
 
     a_in_flat = tf.reshape(
       a_in,
-      shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
     a_out_flat = tf.reshape(
       a_out,
-      shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
     h_flat = tf.reshape(
       node_state,
-      shape=[-1, self.params.node_dim * num_nodes, 1])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, 1])
 
     a_in_mult = tf.reshape(
       tf.matmul(a_in_flat, h_flat, name='a_in_mult'), 
-      shape=[batch_size * num_nodes, self.params.node_dim])
+      shape=[self.params.batch_size * self.params.padded_num_nodes, self.params.node_dim])
     a_out_mult = tf.reshape(
       tf.matmul(a_out_flat, h_flat, name='a_out_mult'),
-      shape=[batch_size * num_nodes, self.params.node_dim])
+      shape=[self.params.batch_size * self.params.padded_num_nodes, self.params.node_dim])
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='ggnn_concat')
-    message = tf.reshape(a_concat, shape=[batch_size, num_nodes, 2 * self.params.node_dim])
+    message = tf.reshape(a_concat, shape=[self.params.batch_size, self.params.padded_num_nodes, 2 * self.params.node_dim])
     message = tf.nn.bias_add(message, self.bias, name='bias_add')
     #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
 
@@ -169,10 +166,8 @@ class UpdateFunction(Model):
       h_t_rs: [batch_size, num_nodes, node_dim]
     """
 
-    batch_size = node_state.shape[0]
-    num_nodes = node_state.shape[1]
-    h_rs = tf.reshape(node_state, shape=[batch_size * num_nodes, -1], name='gru_h_rs')
-    m_rs = tf.reshape(message, shape=[batch_size * num_nodes, -1], name='gru_m_rs')
+    h_rs = tf.reshape(node_state, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='gru_h_rs')
+    m_rs = tf.reshape(message, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='gru_m_rs')
 
     z = tf.sigmoid(
       tf.matmul(m_rs, self.w_z) + tf.matmul(h_rs, self.u_z), name='gru_z_t')
@@ -181,7 +176,7 @@ class UpdateFunction(Model):
     h_tilda = tf.tanh(
       tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r, h_rs), self.u), name='gru_h_tilda')
     h_t = tf.add(tf.multiply(1 - z, h_rs), tf.multiply(z, h_tilda), name='gru_h_t')
-    h_t_rs = tf.reshape(h_t, shape=[batch_size, num_nodes, -1], name='gru_h_t_rs')
+    h_t_rs = tf.reshape(h_t, shape=[self.params.batch_size, self.params.padded_num_nodes, -1], name='gru_h_t_rs')
 
     return h_t_rs
 
@@ -216,17 +211,14 @@ class ReadoutFunction(Model):
       output: [batch_size, output_dim]
     """
 
-    num_nodes = input_node.shape[1]
-    batch_size = input_node.shape[0]
-
     h_x = tf.reshape(
       tf.concat([hidden_node, input_node], 2, name='graph_level_concat'),
-      shape=[batch_size * num_nodes, -1])
+      shape=[self.params.batch_size * self.params.padded_num_nodes, -1])
     sigm = tf.sigmoid(tf.matmul(h_x, self.i))
     tanh = tf.tanh(tf.matmul(h_x, self.j))
     act = tf.reshape(
       tf.multiply(sigm, tanh),
-      shape=[batch_size, num_nodes, -1])
+      shape=[self.params.batch_size, self.params.padded_num_nodes, -1])
     reduce = tf.reduce_sum(act, axis=1)
     output = tf.tanh(reduce)
 
