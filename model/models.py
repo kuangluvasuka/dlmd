@@ -62,7 +62,8 @@ class MessageFunction(Model):
   def fprop(
     self, 
     node_state,
-    adj_mat):
+    adj_mat,
+    reuse=False):
     """Compute a_v^t from h_v^{t-1}.
     
     Args:
@@ -70,12 +71,26 @@ class MessageFunction(Model):
       adj_mat (tf.int32): [batch_size, num_nodes, num_nodes]
     """
 
-    #if not reuse_graph_tensors:
-    #  self._init_graph(adj_mat)
+    if not reuse:
+      self._compute_parameter_tying(adj_mat)
     
     #tf.Assert(self._a_in, adj_mat)
 
     return self._function(node_state, adj_mat)
+
+  def _compute_parameter_tying(self, adj_mat):
+    a_in = tf.gather(self.matrix_in, adj_mat, name='a_in_gather')
+    a_out = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]), name='a_out_gather')
+    a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
+    a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
+    self.a_in = tf.reshape(
+      a_in,
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
+    #a_in_flat = tf.Print(a_in_flat, [tf.shape(a_in_flat)], '~~~~~~~~~~~~~~~: ')
+    self.a_out = tf.reshape(
+      a_out,
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
+
 
   def _ggnn(self, node_state, adj_mat):
     """Gated Graph Neural Network for message passing.
@@ -91,26 +106,15 @@ class MessageFunction(Model):
                         [batch_size, num_nodes, 2 * node_dim]
     """
 
-    a_in = tf.gather(self.matrix_in, adj_mat)
-    a_out = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]))
-    a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
-    a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
-
-    a_in_flat = tf.reshape(
-      a_in,
-      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
-    a_out_flat = tf.reshape(
-      a_out,
-      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
     h_flat = tf.reshape(
       node_state,
       shape=[-1, self.params.node_dim * self.params.padded_num_nodes, 1])
 
     a_in_mult = tf.reshape(
-      tf.matmul(a_in_flat, h_flat, name='a_in_mult'), 
+      tf.matmul(self.a_in, h_flat, name='a_in_mult'), 
       shape=[self.params.batch_size * self.params.padded_num_nodes, self.params.node_dim])
     a_out_mult = tf.reshape(
-      tf.matmul(a_out_flat, h_flat, name='a_out_mult'),
+      tf.matmul(self.a_out, h_flat, name='a_out_mult'),
       shape=[self.params.batch_size * self.params.padded_num_nodes, self.params.node_dim])
 
     a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='ggnn_concat')

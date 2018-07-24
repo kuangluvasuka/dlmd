@@ -65,7 +65,7 @@ class MPNN(models.Model):
     h_t = input_node
     for t in range(self.params.prop_step):
       if self.params.reuse_graph_tensor:
-        message = self.m_function.fprop(h_t, adj_mat)
+        message = self.m_function.fprop(h_t, adj_mat, reuse=(t != 0))
         h_t = self.u_function.fprop(h_t, message)
       else:
         message = self.m_function[t].fprop(h_t, adj_mat)
