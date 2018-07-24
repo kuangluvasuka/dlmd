@@ -25,13 +25,13 @@ class MPNN(models.Model):
     """
 
     return tf.contrib.training.HParams(
-      batch_size=4,
-      padded_num_nodes=30,
+      batch_size=10,
+      padded_num_nodes=70,
       node_dim=50,
       edge_dim=50,
-      prop_step = 6,
-      reuse_graph_tensor = False,
-      output_dim = 12,
+      prop_step=6,
+      reuse_graph_tensor=False,
+      output_dim=12,
       #TODO: more hps
       num_edge_class=5,
       non_edge=False,
