@@ -223,12 +223,11 @@ class ReadoutFunction(Model):
       shape=[self.params.batch_size * self.params.padded_num_nodes, -1],
       name='h_x')
     sigm = tf.sigmoid(tf.matmul(h_x, self.i))
-    tanh = tf.tanh(tf.matmul(h_x, self.j))
+    idn = tf.matmul(h_x, self.j)
     act = tf.reshape(
-      tf.multiply(sigm, tanh),
+      tf.multiply(sigm, idn),
       shape=[self.params.batch_size, self.params.padded_num_nodes, -1])
-    reduce = tf.reduce_sum(act, axis=1)
-    output = tf.tanh(reduce)
+    output = tf.reduce_sum(act, axis=1)
 
     return output
 
