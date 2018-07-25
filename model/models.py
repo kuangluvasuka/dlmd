@@ -55,7 +55,7 @@ class MessageFunction(Model):
 
   def _select_function(self):
     self._function = {
-      'ggnn': self._ggnn
+      'ggnn': self._GGNN
 
     }.get(self.params.message_function)
 
@@ -79,20 +79,22 @@ class MessageFunction(Model):
     return self._function(node_state, adj_mat)
 
   def _compute_parameter_tying(self, adj_mat):
-    a_in = tf.gather(self.matrix_in, adj_mat, name='a_in_gather')
-    a_out = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]), name='a_out_gather')
-    a_in = tf.transpose(a_in, [0, 1, 3, 2, 4])
-    a_out = tf.transpose(a_out, [0, 1, 3, 2, 4])
+    a_in_gather = tf.gather(self.matrix_in, adj_mat, name='a_in_gather')
+    a_out_gather = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]), name='a_out_gather')
+    a_in = tf.transpose(a_in_gather, [0, 1, 3, 2, 4])
+    a_out = tf.transpose(a_out_gather, [0, 1, 3, 2, 4])
     self.a_in = tf.reshape(
       a_in,
-      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes],
+      name='self_a_in')
     #a_in_flat = tf.Print(a_in_flat, [tf.shape(a_in_flat)], '~~~~~~~~~~~~~~~: ')
     self.a_out = tf.reshape(
       a_out,
-      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, self.params.node_dim * self.params.padded_num_nodes],
+      name='self_a_out')
 
 
-  def _ggnn(self, node_state, adj_mat):
+  def _GGNN(self, node_state, adj_mat):
     """Gated Graph Neural Network for message passing.
     This function implements the Eq.(2) in Li's paper 
     https://arxiv.org/pdf/1511.05493.pdf.
@@ -108,7 +110,8 @@ class MessageFunction(Model):
 
     h_flat = tf.reshape(
       node_state,
-      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, 1])
+      shape=[-1, self.params.node_dim * self.params.padded_num_nodes, 1],
+      name='h_flat')
 
     a_in_mult = tf.reshape(
       tf.matmul(self.a_in, h_flat, name='a_in_mult'), 
@@ -117,10 +120,9 @@ class MessageFunction(Model):
       tf.matmul(self.a_out, h_flat, name='a_out_mult'),
       shape=[self.params.batch_size * self.params.padded_num_nodes, self.params.node_dim])
 
-    a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='ggnn_concat')
-    message = tf.reshape(a_concat, shape=[self.params.batch_size, self.params.padded_num_nodes, 2 * self.params.node_dim])
-    message = tf.nn.bias_add(message, self.bias, name='bias_add')
-    #a_v = tf.Print(a_v, [self._bias.shape], "Shape of message tensor is: ")
+    a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='a_concat')
+    a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t')
+    message = tf.reshape(a_t, shape=[self.params.batch_size, self.params.padded_num_nodes, 2 * self.params.node_dim], name='message')
 
     return message
 
@@ -143,23 +145,23 @@ class UpdateFunction(Model):
       And Eq.(6):          h_v^{t} = (1 - z_v{t}) 0 h_v^{t-1} + z_v^{t} 0 h~v^{t}
     """
 
-    self.w_z = tf.get_variable('w_z', shape=[2 * self.params.node_dim, self.params.node_dim])
-    self.u_z = tf.get_variable('u_z', shape=[self.params.node_dim, self.params.node_dim])
-    self.w_r = tf.get_variable('w_r', shape=[2 * self.params.node_dim, self.params.node_dim])
-    self.u_r = tf.get_variable('u_r', shape=[self.params.node_dim, self.params.node_dim])
-    self.w = tf.get_variable('w', shape=[2 * self.params.node_dim, self.params.node_dim])
-    self.u = tf.get_variable('u', shape=[self.params.node_dim, self.params.node_dim])
+    self.w_z = tf.get_variable('W_z', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u_z = tf.get_variable('U_z', shape=[self.params.node_dim, self.params.node_dim])
+    self.w_r = tf.get_variable('W_r', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u_r = tf.get_variable('U_r', shape=[self.params.node_dim, self.params.node_dim])
+    self.w = tf.get_variable('W', shape=[2 * self.params.node_dim, self.params.node_dim])
+    self.u = tf.get_variable('U', shape=[self.params.node_dim, self.params.node_dim])
 
   def _select_function(self):
     self._function = {
-      'GRU':  self._gru
+      'GRU':  self._GRU
 
     }.get(self.params.update_function)
 
   def fprop(self, node_state, message):
     return self._function(node_state, message)
 
-  def _gru(self, node_state, message):
+  def _GRU(self, node_state, message):
     """Gated Recurrent Units (Cho et al., 2014)
     
     Args:
@@ -170,17 +172,18 @@ class UpdateFunction(Model):
       h_t_rs: [batch_size, num_nodes, node_dim]
     """
 
-    h_rs = tf.reshape(node_state, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='gru_h_rs')
-    m_rs = tf.reshape(message, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='gru_m_rs')
+    h_rs = tf.reshape(node_state, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='h_rs')
+    m_rs = tf.reshape(message, shape=[self.params.batch_size * self.params.padded_num_nodes, -1], name='m_rs')
 
-    z = tf.sigmoid(
-      tf.matmul(m_rs, self.w_z) + tf.matmul(h_rs, self.u_z), name='gru_z_t')
-    r = tf.sigmoid(
-      tf.matmul(m_rs, self.w_r) + tf.matmul(h_rs, self.u_r), name='gru_r_t')
+    z_t = tf.sigmoid(
+      tf.matmul(m_rs, self.w_z) + tf.matmul(h_rs, self.u_z), name='z_t')
+    r_t = tf.sigmoid(
+      tf.matmul(m_rs, self.w_r) + tf.matmul(h_rs, self.u_r), name='r_t')
     h_tilda = tf.tanh(
-      tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r, h_rs), self.u), name='gru_h_tilda')
-    h_t = tf.add(tf.multiply(1 - z, h_rs), tf.multiply(z, h_tilda), name='gru_h_t')
-    h_t_rs = tf.reshape(h_t, shape=[self.params.batch_size, self.params.padded_num_nodes, -1], name='gru_h_t_rs')
+      tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r_t, h_rs), self.u), name='h_tilda')
+    h_t = tf.add(tf.multiply(1 - z_t, h_rs), tf.multiply(z_t, h_tilda), name='h_t')
+
+    h_t_rs = tf.reshape(h_t, shape=[self.params.batch_size, self.params.padded_num_nodes, -1], name='h_t_rs')
 
     return h_t_rs
 
@@ -216,8 +219,9 @@ class ReadoutFunction(Model):
     """
 
     h_x = tf.reshape(
-      tf.concat([hidden_node, input_node], 2, name='graph_level_concat'),
-      shape=[self.params.batch_size * self.params.padded_num_nodes, -1])
+      tf.concat([hidden_node, input_node], 2, name='concat'),
+      shape=[self.params.batch_size * self.params.padded_num_nodes, -1],
+      name='h_x')
     sigm = tf.sigmoid(tf.matmul(h_x, self.i))
     tanh = tf.tanh(tf.matmul(h_x, self.j))
     act = tf.reshape(
