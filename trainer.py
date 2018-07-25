@@ -13,7 +13,11 @@ class BaseTrain:
     self.hparams = hparams
     self.graph = tf.Graph()
     self.sess = tf.Session(graph=self.graph)
-    self._initialize_model()
+
+    with self.graph.as_default():
+      self._make_train_step()
+      # TODO: add resume option
+      self._initialize_model()
 
   def train(self):
     #TODO: a loop calling run epoch
@@ -25,13 +29,13 @@ class BaseTrain:
                        tf.local_variables_initializer())
     self.sess.run(init_op)
 
-  def _make_model(self):
-    """Create computational graph of loss func."""
-    raise NotImplementedError('Subclass should implement _make_model() method.')
-
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
-    raise NotImplementedError('Subclass should implement _make_train_step() method.')
+    adj_mat, node_state, label = self.data.iterator.get_next()
+    pred = self.model.fprop(node_state, adj_mat)
+    self.loss_op = tf.losses.mean_squared_error(pred, label)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+    self.train_op = optimizer.minimize(self.loss_op)
 
   def _run_epoch(self):
     """A single training epoch, which loops over the number of mini-batches."""
