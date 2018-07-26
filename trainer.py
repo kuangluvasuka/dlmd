@@ -21,12 +21,6 @@ class BaseTrain:
       # TODO: add resume option
       self._initialize_model()
 
-  def train(self):
-    self.sess.run(self.data.iterator.initializer)
-    #TODO: a loop calling run epoch
-    with self.graph.as_default():
-      pass
-
   def _initialize_model(self):
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
@@ -42,6 +36,25 @@ class BaseTrain:
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     self.train_op = optimizer.minimize(self.loss_op)
+
+  def train(self):
+    self.sess.run(self.data.iterator.initializer)
+    with self.graph.as_default():
+      # TODO: add resume option
+
+      format_str = ('%s: loss: %.5f | acc: %.5f | examples/sec: %.2f')
+      for epoch in range(self.hparams.epoch_num):
+        log.infov('Epoch %i' % epoch)
+
+        #Train
+        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, True)
+        log.infov(format_str % ('Train', train_loss, train_acc, train_speed))
+
+        #Validate
+        valid_loss, valid_acc, valid_speed = self._run_epoch('epoch %i (evaluating)' % epoch, False)
+        log.infov(format_str % ('Validate', valid_loss, valid_acc, valid_speed))
+
+        # TODO: save logs to file
 
   def _run_epoch(self, *args, **kwargs):
     """A single training epoch, which loops over the number of mini-batches."""
@@ -68,10 +81,11 @@ class Trainer(BaseTrain):
       loss += batch_loss
       accuracy += batch_acc
 
-      log.info('Running %s, batch %d/%d. Loss: %.4f', % (epoch_name,
-                                                         step,
-                                                         self.steps_per_epoch,
-                                                         batch_loss))
+      if step % 10 == 0:
+        log.info('Running %s, batch %d/%d. Loss: %.4f', % (epoch_name,
+                                                           step,
+                                                           self.steps_per_epoch,
+                                                           batch_loss))
     
     instance_per_sec = self.hparams.train_set_num / (time.time() - start_time)
     loss = loss / self.steps_per_epoch
