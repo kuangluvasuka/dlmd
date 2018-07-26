@@ -16,28 +16,36 @@ class MPNN(models.Model):
   def default_hparams():
     """Define hyper parameters.
 
+    Model params:
     - padded_input_dim: to keep the input size constant due to the number of atoms per molecule varies
     - node_dim: dimension of node_state, i.e. h_v
     - edge_dim: dimension of edge_state
     - prop_step: step limit for message propagation
     - reuse_graph_tensor: use the same message and update weights in each propagation step
     - output_dim: dimension of the vector valued output, i.e. y_hat
+
+    Training Params:
+
     """
 
     return tf.contrib.training.HParams(
-      batch_size=10,
       padded_num_nodes=70,
       node_dim=50,
       edge_dim=50,
       prop_step=6,
       reuse_graph_tensor=False,
       output_dim=12,
-      #TODO: more hps
       num_edge_class=5,
       non_edge=False,
       message_function='ggnn',
       update_function='GRU',
-      readout_function='graph_level')
+      readout_function='graph_level',
+      batch_size=10,
+      epoch_num=3,
+      train_set_num=1000,
+      valid_set_num=100,
+      test_set_num=100,
+      learning_rate=0.001)
 
   def __init__(self, params):
     super(MPNN, self).__init__(params)
