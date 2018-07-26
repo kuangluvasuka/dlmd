@@ -20,6 +20,7 @@ class BaseTrain:
       self._initialize_model()
 
   def train(self):
+    self.sess.run(self.data.iterator.initializer)
     #TODO: a loop calling run epoch
     with self.graph.as_default():
       pass
