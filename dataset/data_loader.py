@@ -19,8 +19,8 @@ class DataLoader:
         [hp.num_nodes, hp.num_nodes],
         [hp.num_nodes, hp.node_dim],
         [None]))
-    train = dataset.take(hp.train_set_num)
-    valid = dataset.skip(hp.train_set_num).take(hp.valid_set_num)
+    train = dataset.take(hp.train_batch_num)
+    valid = dataset.skip(hp.train_batch_num).take(hp.valid_batch_num)
     self.train_iterator = train.make_initializable_iterator()
     self.valid_iterator = valid.make_initializable_iterator()
 

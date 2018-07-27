@@ -15,7 +15,6 @@ class BaseTrain:
     self.hparams = hparams
     self.graph = graph
     self.sess = tf.Session(graph=self.graph, config=config)
-    self.steps_per_epoch = self.hparams.train_set_num // self.hparams.batch_size
 
     with self.graph.as_default():
       self._make_train_step()
@@ -55,11 +54,11 @@ class BaseTrain:
 
         #Train
         train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, train_handle, True)
-        log.infov(format_str % ('Train', train_loss, train_acc, train_speed))
+        log.infov(format_str % ('Training', train_loss, train_acc, train_speed))
 
         #Validate
         valid_loss, valid_acc, valid_speed = self._run_epoch('epoch %i (evaluating)' % epoch, valid_handle, False)
-        log.infov(format_str % ('Validate', valid_loss, valid_acc, valid_speed))
+        log.infov(format_str % ('Validation', valid_loss, valid_acc, valid_speed))
 
         # TODO: save logs to file
 
@@ -78,7 +77,12 @@ class Trainer(BaseTrain):
     accuracy = 0
     start_time = time.time()
 
-    for step in range(self.steps_per_epoch):
+    # TODO: refactor: replace this if-else and for-loop block with while-loop and try-except
+    if is_training:
+      steps = self.hparams.train_batch_num
+    else:
+      steps = self.hparams.valid_batch_num
+    for step in range(steps):
       if is_training:
         fetch_list = [self.loss_op, self.accuracy_op, self.train_op]
       else:
@@ -88,15 +92,15 @@ class Trainer(BaseTrain):
       loss += result[0]
       accuracy += result[1]
 
-      if step % 10 == 0:
-        log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
-                                                           step,
-                                                           self.steps_per_epoch,
-                                                           result[0]))
-    
-    instance_per_sec = self.hparams.train_set_num / (time.time() - start_time)
-    loss = loss / self.steps_per_epoch
-    accuracy = accuracy / self.steps_per_epoch
+      if is_training and step % self.hparams.log_step == 0:
+        log.info('Running %s, samples %d/%d. Loss: %.4f' % (epoch_name,
+                                                          step,
+                                                          steps,
+                                                          result[0]))
+   
+    instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
+    loss = loss / steps
+    accuracy = accuracy / steps
 
     return loss, accuracy, instance_per_sec
 

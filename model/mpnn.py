@@ -42,10 +42,11 @@ class MPNN(models.Model):
       readout_function='graph_level',
       batch_size=10,
       epoch_num=3,
-      train_set_num=1000,
-      valid_set_num=100,
-      test_set_num=100,
-      learning_rate=0.001)
+      train_batch_num=1000,
+      valid_batch_num=100,
+      test_batch_num=100,
+      learning_rate=0.001,
+      log_step=10)
 
   def __init__(self, params):
     super(MPNN, self).__init__(params)
