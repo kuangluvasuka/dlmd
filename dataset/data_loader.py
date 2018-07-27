@@ -4,13 +4,14 @@ import tensorflow as tf
 
 class DataLoader:
   def __init__(self, data_dir, hparams):
-    self.dataset = tf.data.TFRecordDataset(data_dir)
-    self.dataset = self.dataset.map(self._parse_function)
-    self.dataset = self.dataset.padded_batch(
+    self._dataset = tf.data.TFRecordDataset(data_dir)
+    # TODO: shuffle dataset
+    self._dataset = self._dataset.map(self._parse_function)
+    self._dataset = self._dataset.padded_batch(
       hparams.batch_size,
       padded_shapes=(
-        [hparams.padded_num_nodes, hparams.padded_num_nodes],
-        [hparams.padded_num_nodes, hparams.node_dim],
+        [hparams.num_nodes, hparams.num_nodes],
+        [hparams.num_nodes, hparams.node_dim],
         [None]))
     self.iterator = self.dataset.make_initializable_iterator()
     #self.next_elet = self.iterator.get_next()

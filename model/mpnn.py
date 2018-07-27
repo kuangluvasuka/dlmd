@@ -29,7 +29,7 @@ class MPNN(models.Model):
     """
 
     return tf.contrib.training.HParams(
-      padded_num_nodes=70,
+      num_nodes=70,
       node_dim=50,
       edge_dim=50,
       prop_step=6,
