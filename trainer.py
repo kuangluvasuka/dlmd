@@ -30,6 +30,7 @@ class BaseTrain:
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
     adj_mat, node_state, label = self.data.iterator.get_next()
+
     pred = self.model.fprop(node_state, adj_mat)
     self.loss_op = tf.losses.mean_squared_error(label, pred)
     self.accuracy_op = tf.reduce_mean(tf.abs(pred - label))
@@ -39,20 +40,25 @@ class BaseTrain:
     self.train_op = optimizer.minimize(self.loss_op)
 
   def train(self):
-    self.sess.run(self.data.iterator.initializer)
     with self.graph.as_default():
       # TODO: add resume option
+      # TODO: add exception handler
 
+      train_handle = self.sess.run(self.data.train_iter.string_handle())
+      valid_handle = self.sess.run(self.data.valid_iter.string_handle())
       format_str = ('%s: loss: %.5f | acc: %.5f | examples/sec: %.2f')
       for epoch in range(self.hparams.epoch_num):
+        self.sess.run(self.data.train_iter.initializer)
+        self.sess.run(self.data.valid_iter.initializer)
+
         log.infov('Epoch %i' % epoch)
 
         #Train
-        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, True)
+        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, train_handle, True)
         log.infov(format_str % ('Train', train_loss, train_acc, train_speed))
 
         #Validate
-        valid_loss, valid_acc, valid_speed = self._run_epoch('epoch %i (evaluating)' % epoch, False)
+        valid_loss, valid_acc, valid_speed = self._run_epoch('epoch %i (evaluating)' % epoch, valid_handle, False)
         log.infov(format_str % ('Validate', valid_loss, valid_acc, valid_speed))
 
         # TODO: save logs to file
@@ -66,7 +72,7 @@ class Trainer(BaseTrain):
   def __init__(self, model, data, graph, hparams, config):
     super(Trainer, self).__init__(model, data, graph, hparams, config)
 
-  def _run_epoch(self, epoch_name: str, is_training: bool):
+  def _run_epoch(self, epoch_name: str, handle, is_training: bool):
 
     loss = 0
     accuracy = 0

@@ -13,8 +13,13 @@ class DataLoader:
         [hparams.num_nodes, hparams.num_nodes],
         [hparams.num_nodes, hparams.node_dim],
         [None]))
-    self.iterator = self.dataset.make_initializable_iterator()
-    #self.next_elet = self.iterator.get_next()
+    self.train = self._dataset.take(1000)
+    self.valid = self._dataset.skip(1000).take(100)
+    self.train_iter = self.train.make_initializable_iterator()
+    self.valid_iter = self.valid.make_initializable_iterator()
+
+    self.handle = tf.placeholder(tf.string, shape=[])
+    self.iterator = tf.data.Iterator.from_string_handle(self.handle, self.train_iter.output_types)
 
   def _parse_function(self, record):
     features = {'label': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
