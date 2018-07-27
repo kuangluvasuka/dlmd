@@ -44,12 +44,12 @@ class BaseTrain:
       # TODO: add resume option
       # TODO: add exception handler
 
-      train_handle = self.sess.run(self.data.train_iter.string_handle())
-      valid_handle = self.sess.run(self.data.valid_iter.string_handle())
+      train_handle = self.sess.run(self.data.train_iterator.string_handle())
+      valid_handle = self.sess.run(self.data.valid_iterator.string_handle())
       format_str = ('%s: loss: %.5f | acc: %.5f | examples/sec: %.2f')
       for epoch in range(self.hparams.epoch_num):
-        self.sess.run(self.data.train_iter.initializer)
-        self.sess.run(self.data.valid_iter.initializer)
+        self.sess.run(self.data.train_iterator.initializer)
+        self.sess.run(self.data.valid_iterator.initializer)
 
         log.infov('Epoch %i' % epoch)
 

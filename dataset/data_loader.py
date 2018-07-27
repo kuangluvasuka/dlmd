@@ -4,22 +4,25 @@ import tensorflow as tf
 
 class DataLoader:
   def __init__(self, data_dir, hparams):
-    self._dataset = tf.data.TFRecordDataset(data_dir)
     # TODO: shuffle dataset
-    self._dataset = self._dataset.map(self._parse_function)
-    self._dataset = self._dataset.padded_batch(
-      hparams.batch_size,
-      padded_shapes=(
-        [hparams.num_nodes, hparams.num_nodes],
-        [hparams.num_nodes, hparams.node_dim],
-        [None]))
-    self.train = self._dataset.take(1000)
-    self.valid = self._dataset.skip(1000).take(100)
-    self.train_iter = self.train.make_initializable_iterator()
-    self.valid_iter = self.valid.make_initializable_iterator()
+    self._create_dataset(data_dir, hparams)
 
     self.handle = tf.placeholder(tf.string, shape=[])
-    self.iterator = tf.data.Iterator.from_string_handle(self.handle, self.train_iter.output_types)
+    self.iterator = tf.data.Iterator.from_string_handle(self.handle, self.train_iterator.output_types)
+
+  def _create_dataset(self, data_dir, hp):
+    """"""
+    dataset = tf.data.TFRecordDataset(data_dir)
+    dataset = dataset.map(self._parse_function).padded_batch(
+      hp.batch_size, 
+      padded_shapes=(
+        [hp.num_nodes, hp.num_nodes],
+        [hp.num_nodes, hp.node_dim],
+        [None]))
+    train = dataset.take(hp.train_set_num)
+    valid = dataset.skip(hp.train_set_num).take(hp.valid_set_num)
+    self.train_iterator = train.make_initializable_iterator()
+    self.valid_iterator = valid.make_initializable_iterator()
 
   def _parse_function(self, record):
     features = {'label': tf.FixedLenFeature((), dtype=tf.string, default_value=""),
