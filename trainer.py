@@ -6,14 +6,15 @@ Training and evaluation classes for MPNN.
 import tensorflow as tf
 import time
 
+from utils.logger import log
 
 class BaseTrain:
-  def __init__(self, model, data, hparams):
+  def __init__(self, model, data, graph, hparams, config):
     self.model = model
     self.data = data
     self.hparams = hparams
-    self.graph = tf.Graph()
-    self.sess = tf.Session(graph=self.graph)
+    self.graph = graph
+    self.sess = tf.Session(graph=self.graph, config=config)
     self.steps_per_epoch = self.hparams.train_set_num // self.hparams.batch_size
 
     with self.graph.as_default():
@@ -62,8 +63,8 @@ class BaseTrain:
 
 
 class Trainer(BaseTrain):
-  def __init__(self, sess, model, data, hparams):
-    super(Trainer, self).__init__(sess, model, data, hparams)
+  def __init__(self, model, data, graph, hparams, config):
+    super(Trainer, self).__init__(model, data, graph, hparams, config)
 
   def _run_epoch(self, epoch_name: str, is_training: bool):
 
@@ -77,15 +78,15 @@ class Trainer(BaseTrain):
       else:
         fetch_list = [self.loss_op, self.accuracy_op]
 
-      batch_loss, batch_acc, _ = self.sess.run(fetch_list)
-      loss += batch_loss
-      accuracy += batch_acc
+      result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
+      loss += result[0]
+      accuracy += result[1]
 
       if step % 10 == 0:
-        log.info('Running %s, batch %d/%d. Loss: %.4f', % (epoch_name,
+        log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
                                                            step,
                                                            self.steps_per_epoch,
-                                                           batch_loss))
+                                                           result[0]))
     
     instance_per_sec = self.hparams.train_set_num / (time.time() - start_time)
     loss = loss / self.steps_per_epoch

@@ -13,6 +13,7 @@ from dataset.data_loader import DataLoader
 from utils.logger import log
 from utils.config import get_args
 from model.mpnn import MPNN
+from trainer import Trainer
 #from dataset import xyz_parser
 
 
@@ -28,42 +29,25 @@ def main():
 
   # Initialize hyper parameters
   hparams = MPNN.default_hparams()
+  hparams.batch_size = 10
+  #hparams.padded_num_nodes = 
+  #hparams.node_dim = 
+  #hparams.prop_step = 
+  hparams.reuse_graph_tensor = True
 
-  # Create data pipeline
-  data = DataLoader(args.datapath, hparams)
+  # Create model
+  graph = tf.Graph()
+  with graph.as_default():
+    data = DataLoader(args.datapath, hparams)
+    model = MPNN(hparams)
 
-  model = MPNN(hparams)
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
 
-
-
-  with tf.Session() as sess:
-
-    sess.run(data.iterator.initializer)
-    g, h, l = sess.run(data.next_elet)
-    log.infov(sess.run(tf.shape(g)))
-    log.infov(g)
-
-
-#    # TODO: need to populate this framework
-#    for step in range(1, N_step):
-#      try:
-#        sess.run(train_op)
-#      except tf.error.OutOfRangeError:
-#        # Reload the iterator when it reaches the end of the dataset
-#        sess.run(iterator.initializer, 
-#                 feed_dict={_data: #dataset
-#                            _label: #label
-#                 })
-#        sess.run(train_op)
-#      
-#      if step % display_step == 0 or step == 1:
-#
-#        loss, acc = sess.run([loss_op, accuracy])
-#        log.info()
-
-
-
-
+  # Trainer
+  trainer = Trainer(model, data, graph, hparams, config)
+  
+  trainer.train()
 
 
 if __name__ == '__main__':
