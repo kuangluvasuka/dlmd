@@ -88,15 +88,15 @@ class Trainer(BaseTrain):
       else:
         fetch_list = [self.loss_op, self.accuracy_op]
 
-      result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
-      loss += result[0]
-      accuracy += result[1]
+      batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
+      loss += batch_result[0]
+      accuracy += batch_result[1]
 
       if is_training and step % self.hparams.log_step == 0:
         log.info('Running %s, samples %d/%d. Loss: %.4f' % (epoch_name,
-                                                          step,
-                                                          steps,
-                                                          result[0]))
+                                                            step,
+                                                            steps,
+                                                            loss / (step+1)))
    
     instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
     loss = loss / steps

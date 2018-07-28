@@ -34,6 +34,8 @@ def main():
   #hparams.node_dim = 
   #hparams.prop_step = 
   hparams.reuse_graph_tensor = True
+  hparams.log_step = 50
+  hparams.epoch_num = 100
 
   # Create model
   graph = tf.Graph()
