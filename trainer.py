@@ -25,6 +25,8 @@ class BaseTrain:
     init_op = tf.group(tf.global_variables_initializer(),
                        tf.local_variables_initializer())
     self.sess.run(init_op)
+    
+    writer = tf.summary.FileWriter('./tf_logs', self.sess.graph)
 
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
