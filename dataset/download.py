@@ -21,12 +21,6 @@ import pickle
 from utils.logger import log
 from xyz_parser import xyz_graph_decoder
 
-def download_qm9(url, file):
-  if os.path.exists(file):
-    log.infov("Found existing QM9 dataset at {}, SKIP downloading!".format(file))
-    return
-  wget.download(url, out=file)
-
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
@@ -36,32 +30,41 @@ def _int64_feature(value):
 def _float_feature(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
+def extract_files(archive, temp_dir):
+  if os.path.exists(temp_dir):
+    log.infov("Found existing xyz files at {}, SKIP Extraction!".format(temp_dir))
+  else:
+    os.mkdir(temp_dir)
+    log.info("Extracting files to {} ...".format(temp_dir))
+    tar = tarfile.open(archive, 'r:*')
+    tar.extractall(temp_dir)
+    tar.close()
+    log.info("Extraction complete.")
+
+def download_qm9(url, file):
+  if os.path.exists(file):
+    log.infov("Found existing QM9 dataset at {}, SKIP downloading!".format(file))
+    return
+  wget.download(url, out=file)
+
 def load_qm9(data_dir):
   log.info("Downloading GDB-9 datasets...")
   url = 'https://ndownloader.figshare.com/files/3195389'
   data_dir = os.path.join(data_dir, 'qm9')
   if not os.path.exists(data_dir):
     os.mkdir(data_dir)
-  raw_file = os.path.join(data_dir, 'dsgdb9nsd.xyz.tar.bz2')
-  download_qm9(url, raw_file)
+  archive = os.path.join(data_dir, 'dsgdb9nsd.xyz.tar.bz2')
+  download_qm9(url, archive)
 
   temp = os.path.join(data_dir, 'dsgdb9nsd')
-  if os.path.exists(temp):
-    log.infov("Found existing QM9 xyz files at {}, SKIP Extraction!".format(temp))
-  else:
-    os.mkdir(temp)
-    log.info("Extracting files to {} ...".format(temp))
-    tar = tarfile.open(raw_file, 'r:bz2')
-    tar.extractall(temp)
-    tar.close()
-    log.info("Extraction complete.")
+  extract_files(archive, temp)
 
   log.info("Parsing XYZ files and streaming parsed features to dataset ..")
   writer = tf.python_io.TFRecordWriter('qm9.tfrecords')
   xyzs = glob.glob(os.path.join(temp, '*.xyz'))
   for i, xyz in enumerate(xyzs):
     if i % 10000 == 0:
-      log.info(str(i) + '/133885 saved..')
+      log.info(str(i) + '/' + str(len(xyzs)) + ' parsed..')
     g, h, e, l = xyz_graph_decoder(xyz)
     g = np.array(g)
     h = np.array(h)
@@ -75,15 +78,41 @@ def load_qm9(data_dir):
     example = tf.train.Example(features=tf.train.Features(feature=feature))
     writer.write(example.SerializeToString())
   writer.close()
+  log.info("Dataset saved in file \'qm9.tfrecords\', DONE!")
 
-log.info("Dataset saved in file \'qm9.tfrecords\', DONE!")
+def load_mol(data_dir):
+  log.info("Preparing mol dataset...")
+  archive = os.path.join(data_dir, 'mols.tar.gz')
+  temp = os.path.join(data_dir, 'mols')
+  extract_files(archive, temp)
+  #NOTE: The files in 'mols.tar.gz' is contained in an additional folder named 'mols', so we need to specify the temp as './mols/mols/*.xyz'.
+  temp = os.path.join(temp, 'mols')
+
+  log.info("Parsing XYZ files and streaming parsed features to dataset ..")
+  writer = tf.python_io.TFRecordWriter('mols.tfrecords')
+  xyzs = glob.glob(os.path.join(temp, '*.xyz'))
+  for i, xyz in enumerate(xyzs):
+    if i % 1000 == 0:
+      log.info(str(i) + '/' + str(len(xyzs)) + ' parsed..')
+
+
+
+
+  writer.close()
+  log.info("Dataset saved in file \'mols.tfrecords\', DONE!")
 
 
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-p', '--path', help='Path to QM9 directory')
+  parser = argparse.ArgumentParser(description='Dataset preparation')
+  parser.add_argument('datasets', metavar='Dataset', type=str, nargs='+', choices=['qm9', 'mol'], help='Select one or more datasets to prepare')
+  parser.add_argument('-p', '--path', help='Path to dataset')
   args = parser.parse_args()
+
   if args.path is None:
     args.path = './'
 
-  load_qm9(args.path)
+  if 'qm9' in args.datasets:
+    load_qm9(args.path)
+  if 'mol' in args.datasets:
+    load_mol(args.path)
+
