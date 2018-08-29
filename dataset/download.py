@@ -20,6 +20,7 @@ import pickle
 
 from utils.logger import log
 from xyz_parser import xyz_graph_decoder
+from xyz_parser import mol_graph_decoder
 
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -94,10 +95,18 @@ def load_mol(data_dir):
   for i, xyz in enumerate(xyzs):
     if i % 1000 == 0:
       log.info(str(i) + '/' + str(len(xyzs)) + ' parsed..')
-
-
-
-
+    g, h, e, l = mol_graph_decoder(xyz)
+    g = np.array(g)
+    h = np.array(h)
+    l = np.array(l)
+    num_nodes = g.shape[0]
+    feature = {'label': _bytes_feature(l.tostring()),
+               'adjacency': _bytes_feature(g.tostring()),
+               'node_state': _bytes_feature(h.tostring()),
+               'edge_state': _bytes_feature(e.tostring()),
+               'num_nodes': _int64_feature(num_nodes)}
+    example = tf.train.Example(features=tf.train.Features(feature=feature))
+    writer.write(example.SerializeToString())
   writer.close()
   log.info("Dataset saved in file \'mols.tfrecords\', DONE!")
 
