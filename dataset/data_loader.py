@@ -6,6 +6,7 @@ class DataLoader:
   def __init__(self, data_dir, hparams):
     # TODO: shuffle dataset
     self._create_dataset(data_dir, hparams)
+    self.output_dim = hparams.output_dim
 
     self.handle = tf.placeholder(tf.string, shape=[])
     self.iterator = tf.data.Iterator.from_string_handle(self.handle, self.train_iterator.output_types)
@@ -45,7 +46,7 @@ class DataLoader:
 
     g = tf.reshape(g, shape=[num_nodes, num_nodes])
     h = tf.reshape(h, shape=[num_nodes, -1])
-    l = tf.reshape(l, shape=[1])
+    l = tf.reshape(l, shape=[self.output_dim])
     #g = tf.Print(g, [tf.shape(g)], 'awleifyuhaskdfshfksahfuia')
 
     return g, h, l
