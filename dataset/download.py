@@ -93,14 +93,18 @@ def load_mol(data_dir):
   writer = tf.python_io.TFRecordWriter('mols.tfrecords')
   xyzs = glob.glob(os.path.join(temp, '*.xyz'))
   for i, xyz in enumerate(xyzs):
+    #if i == 2000:
+    #  break
     if i % 1000 == 0:
       log.info(str(i) + '/' + str(len(xyzs)) + ' parsed..')
     g, h, e, l = mol_graph_decoder(xyz)
     g = np.array(g)
     h = np.array(h)
-    l = np.array(l)
+    #l = np.array(l)
     num_nodes = g.shape[0]
-    feature = {'label': _bytes_feature(l.tostring()),
+    #log.infov(l)
+    #log.infov(num_nodes)
+    feature = {'label': _int64_feature(l),
                'adjacency': _bytes_feature(g.tostring()),
                'node_state': _bytes_feature(h.tostring()),
                'edge_state': _bytes_feature(e.tostring()),
