@@ -30,15 +30,55 @@ class BaseTrain:
 
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
-    adj_mat, node_state, label = self.data.iterator.get_next()
+    raise NotImplementedError('Subclass should implement run_eopch() method.')
 
-    pred = self.model.fprop(node_state, adj_mat)
-    self.loss_op = tf.losses.mean_squared_error(label, pred)
-    self.accuracy_op = tf.reduce_mean(tf.abs(pred - label))
-    #self.accuracy_op = tf.metrics.mean_absolute_error(label, pred)
+  def _evaluate(self, epoch_name: str, handle):
+    """Evaluation epoch."""
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-    self.train_op = optimizer.minimize(self.loss_op)
+    loss = 0
+    accuracy = 0
+    steps = self.hparams.valid_batch_num
+    start_time = time.time()
+
+    for step in range(steps):
+      fetch_list = [self.loss_op, self.accuracy_op]
+      batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
+      loss += batch_result[0]
+      accuracy += batch_result[1]
+
+    instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
+    loss = loss / steps
+    accuracy = accuracy / steps
+
+    return loss, accuracy, instance_per_sec
+
+  def _run_epoch(self, epoch_name: str, handle):
+    """A single training epoch, which loops over the number of mini-batches."""
+
+    loss = 0
+    accuracy = 0
+    start_time = time.time()
+
+    # TODO: refactor: replace this if-else and for-loop block with while-loop and try-except
+    steps = self.hparams.train_batch_num
+    for step in range(steps):
+      fetch_list = [self.loss_op, self.accuracy_op, self.train_op]
+
+      batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
+      loss += batch_result[0]
+      accuracy += batch_result[1]
+
+      log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
+                                                        step,
+                                                        steps,
+                                                        loss / (step+1)))
+   
+    instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
+    loss = loss / steps
+    accuracy = accuracy / steps
+
+    return loss, accuracy, instance_per_sec
+
 
   def train(self):
     with self.graph.as_default():
@@ -55,55 +95,50 @@ class BaseTrain:
         log.infov('Epoch %i' % epoch)
 
         #Train
-        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, train_handle, True)
+        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, train_handle)
         log.infov(format_str % ('Training', train_loss, train_acc, train_speed))
 
         #Validate
-        valid_loss, valid_acc, valid_speed = self._run_epoch('epoch %i (evaluating)' % epoch, valid_handle, False)
+        valid_loss, valid_acc, valid_speed = self._evaluate('epoch %i (evaluating)' % epoch, valid_handle)
         log.infov(format_str % ('Validation', valid_loss, valid_acc, valid_speed))
 
         # TODO: save logs to file
 
-  def _run_epoch(self, *args, **kwargs):
-    """A single training epoch, which loops over the number of mini-batches."""
-    raise NotImplementedError('Subclass should implement run_eopch() method.')
 
 
-class Trainer(BaseTrain):
+class TrainerRegression(BaseTrain):
   def __init__(self, model, data, graph, hparams, config):
-    super(Trainer, self).__init__(model, data, graph, hparams, config)
+    super(TrainerRegression, self).__init__(model, data, graph, hparams, config)
 
-  def _run_epoch(self, epoch_name: str, handle, is_training: bool):
+  def _make_train_step(self):
+    """Create train step with optimizer in the graph."""
+    adj_mat, node_state, label = self.data.iterator.get_next()
 
-    loss = 0
-    accuracy = 0
-    start_time = time.time()
+    pred = self.model.fprop(node_state, adj_mat)
+    self.loss_op = tf.losses.mean_squared_error(label, pred)
+    self.accuracy_op = tf.reduce_mean(tf.abs(pred - label))
+    #self.accuracy_op = tf.metrics.mean_absolute_error(label, pred)
 
-    # TODO: refactor: replace this if-else and for-loop block with while-loop and try-except
-    if is_training:
-      steps = self.hparams.train_batch_num
-    else:
-      steps = self.hparams.valid_batch_num
-    for step in range(steps):
-      if is_training:
-        fetch_list = [self.loss_op, self.accuracy_op, self.train_op]
-      else:
-        fetch_list = [self.loss_op, self.accuracy_op]
+    optimizer = tf.train.AdamOptimizer(learning_rate=self.hparams.learning_rate)
+    self.train_op = optimizer.minimize(self.loss_op)
 
-      batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
-      loss += batch_result[0]
-      accuracy += batch_result[1]
 
-      if is_training and step % self.hparams.log_step == 0:
-        log.info('Running %s, samples %d/%d. Loss: %.4f' % (epoch_name,
-                                                            step,
-                                                            steps,
-                                                            loss / (step+1)))
-   
-    instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
-    loss = loss / steps
-    accuracy = accuracy / steps
+class TrainerClassification(BaseTrain):
+  def __init__(self, model, data, graph, hparams, config):
+    super(TrainerClassification, self).__init__(model, data, graph, hparams, config)
 
-    return loss, accuracy, instance_per_sec
+  def _make_train_step(self):
+    adj_mat, node_state, label = self.data.iterator.get_next()
+    one_hot_label = tf.one_hot(label, 10)
+    logit = self.model.fprop(node_state, adj_mat)
+    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logit, labels=one_hot_label)
+    self.loss_op = tf.reduce_mean(loss)
+
+    pred = tf.argmax(logit, 1)
+    correct = tf.equal(pred, label)
+    self.accuracy_op = tf.reduce_mean(tf.cast(correct, tf.float32))
+
+    optimizer = tf.train.AdamOptimizer(learning_rate=self.hparams.learning_rate)
+    self.train_op = optimizer.minimize(self.loss_op)
 
   
