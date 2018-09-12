@@ -68,10 +68,11 @@ class BaseTrain:
       loss += batch_result[0]
       accuracy += batch_result[1]
 
-      log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
-                                                        step,
-                                                        steps,
-                                                        loss / (step+1)))
+      if step % self.hparams.log_step == 0:
+        log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
+                                                          step,
+                                                          steps,
+                                                          batch_result[0]))
    
     instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
     loss = loss / steps
@@ -129,9 +130,10 @@ class TrainerClassification(BaseTrain):
 
   def _make_train_step(self):
     adj_mat, node_state, label = self.data.iterator.get_next()
-    one_hot_label = tf.one_hot(label, 10)
+    one_hot_label = tf.one_hot(label, self.hparams.output_dim)
     logit = self.model.fprop(node_state, adj_mat)
-    loss = tf.nn.softmax_cross_entropy_with_logits(logits=logit, labels=one_hot_label)
+    #logit = tf.Print(logit, [logit], message='##############logit is : ')
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit, labels=one_hot_label)
     self.loss_op = tf.reduce_mean(loss)
 
     pred = tf.argmax(logit, 1)

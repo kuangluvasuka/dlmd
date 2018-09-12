@@ -128,6 +128,9 @@ class MessageFunction(Model):
 
     return message
 
+  def _EdgeNetwork(self, ):
+    pass
+
 
 class UpdateFunction(Model):
   def __init__(self, params):
@@ -198,8 +201,24 @@ class ReadoutFunction(Model):
     self.init_graph()
 
   def _init_graph(self):
-    self.i = tf.get_variable('i', shape=[2 * self.params.node_dim, self.params.output_dim])
-    self.j = tf.get_variable('j', shape=[2 * self.params.node_dim, self.params.output_dim])
+    with tf.variable_scope('fully_connected_i'):
+      self.W_i, self.b_i = self._fully_connected_var('i')
+    with tf.variable_scope('fully_connected_j'):
+      self.W_j, self.b_j = self._fully_connected_var('j')
+
+  def _fully_connected_var(self, name: str):
+    """Define weights of fully connected layers."""
+    W = []
+    b = []
+    layer_dim = 2 * self.params.node_dim    # dim of h_x concatenated by hidden_node and input_node
+    for l in range(self.params.num_layers):
+      W.append(tf.get_variable('W_{}'.format(l), shape=[layer_dim, self.params.fc_dim]))
+      b.append(tf.get_variable('b_{}'.format(l), shape=[self.params.fc_dim]))
+      layer_dim = self.params.fc_dim
+    W.append(tf.get_variable('W_out', shape=[layer_dim, self.params.output_dim]))
+    b.append(tf.get_variable('b_out', shape=[self.params.output_dim]))
+
+    return W, b
 
   def _select_function(self):
     self._function = {
@@ -221,17 +240,40 @@ class ReadoutFunction(Model):
       output: [batch_size, output_dim]
     """
 
-    with tf.name_scope('feedforward'):
-      h_x = tf.reshape(
-        tf.concat([hidden_node, input_node], 2, name='concat'),
+    if self.params.activation == 'relu':
+      act = tf.nn.relu
+    elif self.params.activation == 'tanh':
+      act = tf.tanh
+    else:
+      raise ValueError("Invalid activation: {}".format(self.params.activation))
+
+    with tf.name_scope('feedforward_nn'):
+      # The concat vector should have dim of [batch_size*num_nodes, 2*node_dim]
+      h_concat = tf.reshape(
+        tf.concat([hidden_node, input_node], axis=2, name='concat'),
         shape=[self.params.batch_size * self.params.num_nodes, -1],
-        name='h_x')
-      sigm = tf.sigmoid(tf.matmul(h_x, self.i))
-      idn = tf.matmul(h_x, self.j)
-      act = tf.reshape(
-        tf.multiply(sigm, idn),
-        shape=[self.params.batch_size, self.params.num_nodes, -1])
-      output = tf.reduce_sum(act, axis=1)
+        name='h_concat')
+
+      with tf.name_scope('fc_i'):
+        h_x = h_concat
+        for l in range(self.params.num_layers):
+          h_x = act(tf.matmul(h_x, self.W_i[l]) + self.b_i[l])
+
+        i_out = tf.matmul(h_x, self.W_i[-1]) + self.b_i[-1]
+
+      with tf.name_scope('fc_j'):
+        h_x = h_concat
+        for l in range(self.params.num_layers):
+          h_x = act(tf.matmul(h_x, self.W_j[l]) + self.b_j[l])
+
+        j_out = tf.matmul(h_x, self.W_j[-1]) + self.b_j[-1]
+
+      gated_out = tf.multiply(tf.sigmoid(i_out), j_out)
+      # TODO: add mask
+      gated_out = tf.reshape(
+        gated_out,
+        shape=[self.params.batch_size, self.params.num_nodes, self.params.output_dim])
+      output = tf.reduce_sum(gated_out, axis=1)
 
       return output
 

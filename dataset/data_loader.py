@@ -4,7 +4,6 @@ import tensorflow as tf
 
 class DataLoader:
   def __init__(self, data_dir, hparams):
-    # TODO: shuffle dataset
     self.output_dim = hparams.output_dim
     self._create_dataset(data_dir, hparams)
 
@@ -14,6 +13,8 @@ class DataLoader:
   def _create_dataset(self, data_dir, hp):
     """"""
     dataset = tf.data.TFRecordDataset(data_dir)
+    # TODO: resolve magic number
+    dataset = dataset.shuffle(buffer_size=67096)
     dataset = dataset.map(self._parse_function).padded_batch(
       hp.batch_size, 
       padded_shapes=(
@@ -40,13 +41,14 @@ class DataLoader:
     e = tf.decode_raw(parsed['edge_state'], tf.float64)
     g = tf.cast(g, tf.int32)
     h = tf.cast(h, tf.float32)
-    l = tf.cast(parsed['label'], tf.float32)
+    l = tf.cast(parsed['label'], tf.int64)
+    #tf.cond(tf.equal(l, 1), lambda:tf.Print(l, [l], message='###########################################') , lambda: tf.Print(l, [l], message='~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'))
     #l = tf.Print(l, [l], message='###########################################')
     num_nodes = tf.cast(parsed['num_nodes'], tf.int32)
 
     g = tf.reshape(g, shape=[num_nodes, num_nodes])
     h = tf.reshape(h, shape=[num_nodes, -1])
-    l = tf.reshape(l, shape=[self.output_dim])
+    l = tf.reshape(l, shape=[1])
     #g = tf.Print(g, [tf.shape(g)], 'awleifyuhaskdfshfksahfuia')
 
     return g, h, l

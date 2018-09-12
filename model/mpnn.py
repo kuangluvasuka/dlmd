@@ -23,6 +23,8 @@ class MPNN(models.Model):
     - prop_step: step limit for message propagation
     - reuse_graph_tensor: use the same message and update weights in each propagation step
     - output_dim: dimension of the vector valued output, i.e. y_hat
+    - num_layers: number of fully connected layers
+    - fc_dim: number of hidden weights in fully connected layer
 
     Training Params:
 
@@ -32,6 +34,8 @@ class MPNN(models.Model):
       num_nodes=70,
       node_dim=50,
       edge_dim=50,
+      fc_dim=200,
+      num_layers=3,
       prop_step=6,
       reuse_graph_tensor=False,
       output_dim=12,
@@ -40,6 +44,7 @@ class MPNN(models.Model):
       message_function='ggnn',
       update_function='GRU',
       readout_function='graph_level',
+      activation='relu',
       batch_size=10,
       epoch_num=3,
       train_batch_num=1000,
