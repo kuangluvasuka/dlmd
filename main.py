@@ -13,7 +13,8 @@ from dataset.data_loader import DataLoader
 from utils.logger import log
 from utils.config import get_args
 from model.mpnn import MPNN
-from trainer import Trainer
+from trainer import TrainerRegression
+from trainer import TrainerClassification
 #from dataset import xyz_parser
 
 
@@ -47,7 +48,7 @@ def main():
   config.gpu_options.allow_growth = True
 
   # Trainer
-  trainer = Trainer(model, data, graph, hparams, config)
+  trainer = TrainerRegression(model, data, graph, hparams, config)
   
   trainer.train()
 
