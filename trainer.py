@@ -113,9 +113,9 @@ class TrainerRegression(BaseTrain):
 
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
-    adj_mat, node_state, label = self.data.iterator.get_next()
+    adj_mat, node_state, mask, label = self.data.iterator.get_next()
 
-    pred = self.model.fprop(node_state, adj_mat)
+    pred = self.model.fprop(node_state, adj_mat, mask)
     self.loss_op = tf.losses.mean_squared_error(label, pred)
     self.accuracy_op = tf.reduce_mean(tf.abs(pred - label))
     #self.accuracy_op = tf.metrics.mean_absolute_error(label, pred)
@@ -129,10 +129,9 @@ class TrainerClassification(BaseTrain):
     super(TrainerClassification, self).__init__(model, data, graph, hparams, config)
 
   def _make_train_step(self):
-    adj_mat, node_state, label = self.data.iterator.get_next()
+    adj_mat, node_state, mask, label = self.data.iterator.get_next()
     one_hot_label = tf.one_hot(label, self.hparams.output_dim)
-    logit = self.model.fprop(node_state, adj_mat)
-    #logit = tf.Print(logit, [logit], message='##############logit is : ')
+    logit = self.model.fprop(node_state, adj_mat, mask)
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit, labels=one_hot_label)
     self.loss_op = tf.reduce_mean(loss)
 

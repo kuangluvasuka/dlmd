@@ -20,6 +20,7 @@ class DataLoader:
       padded_shapes=(
         [hp.num_nodes, hp.num_nodes],
         [hp.num_nodes, hp.node_dim],
+        [hp.num_nodes],
         [None]))
     train = dataset.take(hp.train_batch_num)
     valid = dataset.skip(hp.train_batch_num).take(hp.valid_batch_num)
@@ -51,5 +52,7 @@ class DataLoader:
     l = tf.reshape(l, shape=[1])
     #g = tf.Print(g, [tf.shape(g)], 'awleifyuhaskdfshfksahfuia')
 
-    return g, h, l
+    m = tf.ones(num_nodes, dtype=tf.float32)
+
+    return g, h, m, l
 

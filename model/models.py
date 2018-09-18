@@ -163,15 +163,16 @@ class UpdateFunction(Model):
 
     }.get(self.params.update_function)
 
-  def fprop(self, node_state, message):
-    return self._function(node_state, message)
+  def fprop(self, node_state, message, mask):
+    return self._function(node_state, message, mask)
 
-  def _GRU(self, node_state, message):
+  def _GRU(self, node_state, message, mask):
     """Gated Recurrent Units (Cho et al., 2014)
     
     Args:
       node_state (tf.float32): [batch_size, num_nodes, node_dim]
       message (tf.float32): [batch_size, num_nodes, 2 * node_dim]
+      mask (tf.bool): [batch_size, num_nodes]
 
     Return new node_state:
       h_t_rs: [batch_size, num_nodes, node_dim]
@@ -188,8 +189,11 @@ class UpdateFunction(Model):
       h_tilda = tf.tanh(
         tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r_t, h_rs), self.u), name='h_tilda')
       h_t = tf.add(tf.multiply(1 - z_t, h_rs), tf.multiply(z_t, h_tilda), name='h_t')
-
-      h_t_rs = tf.reshape(h_t, shape=[self.params.batch_size, self.params.num_nodes, -1], name='h_t_rs')
+      mask_col = tf.reshape(mask, 
+                            shape=[self.params.batch_size * self.params.num_nodes, 1], 
+                            name='mask_col')
+      h_t_mask = tf.multiply(h_t, mask_col, name='h_t_mask')
+      h_t_rs = tf.reshape(h_t_mask, shape=[self.params.batch_size, self.params.num_nodes, -1], name='h_t_rs')
 
       return h_t_rs
 
@@ -226,15 +230,16 @@ class ReadoutFunction(Model):
 
     }.get(self.params.readout_function)
   
-  def fprop(self, hidden_node, input_node):
-    return self._function(hidden_node, input_node)
+  def fprop(self, hidden_node, input_node, mask):
+    return self._function(hidden_node, input_node, mask)
 
-  def _graph_level(self, hidden_node, input_node):
+  def _graph_level(self, hidden_node, input_node, mask):
     """Using the Graph-level output described in GG-NN paper
     
     Args:
       hidden_node: [batch_size, num_nodes, node_dim]
       input_node: [batch_size, num_nodes, node_dim]
+      mask (tf.bool): [batch_size, num_nodes]
 
     Return:
       output: [batch_size, output_dim]
@@ -269,11 +274,15 @@ class ReadoutFunction(Model):
         j_out = tf.matmul(h_x, self.W_j[-1]) + self.b_j[-1]
 
       gated_out = tf.multiply(tf.sigmoid(i_out), j_out)
-      # TODO: add mask
-      gated_out = tf.reshape(
-        gated_out,
-        shape=[self.params.batch_size, self.params.num_nodes, self.params.output_dim])
-      output = tf.reduce_sum(gated_out, axis=1)
+      mask_col = tf.reshape(mask, 
+                            shape=[self.params.batch_size * self.params.num_nodes, 1], 
+                            name='mask_col')
+      gated_mask = tf.multiply(gated_out, mask_col, name='gated_mask')
+      gated_rs = tf.reshape(
+        gated_mask,
+        shape=[self.params.batch_size, self.params.num_nodes, self.params.output_dim],
+        name='gated_rs')
+      output = tf.reduce_sum(gated_rs, axis=1, name='output')
 
       return output
 
