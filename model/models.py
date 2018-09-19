@@ -31,7 +31,6 @@ class MessageFunction(Model):
 
   def __init__(self, params):
     super(MessageFunction, self).__init__(params)
-    self._select_function()
     self.init_graph()
   
   def _init_graph(self):
@@ -53,12 +52,6 @@ class MessageFunction(Model):
     if self.params.non_edge:
       pass
 
-  def _select_function(self):
-    self._function = {
-      'ggnn': self._GGNN
-
-    }.get(self.params.message_function)
-
   def fprop(
     self, 
     node_state,
@@ -74,9 +67,7 @@ class MessageFunction(Model):
     if not reuse:
       self._compute_parameter_tying(adj_mat)
     
-    #tf.Assert(self._a_in, adj_mat)
-
-    return self._function(node_state, adj_mat)
+    return self._GGNN(node_state, adj_mat)
 
   def _compute_parameter_tying(self, adj_mat):
     with tf.name_scope('precompute_graph'):
@@ -93,7 +84,6 @@ class MessageFunction(Model):
         a_out,
         shape=[-1, self.params.node_dim * self.params.num_nodes, self.params.node_dim * self.params.num_nodes],
         name='a_out')
-
 
   def _GGNN(self, node_state, adj_mat):
     """Gated Graph Neural Network for message passing.
@@ -128,14 +118,10 @@ class MessageFunction(Model):
 
     return message
 
-  def _EdgeNetwork(self, ):
-    pass
-
 
 class UpdateFunction(Model):
   def __init__(self, params):
     super(UpdateFunction, self).__init__(params)
-    self._select_function()
     self.init_graph()
   
   def _init_graph(self):
@@ -157,14 +143,8 @@ class UpdateFunction(Model):
     self.w = tf.get_variable('W', shape=[2 * self.params.node_dim, self.params.node_dim])
     self.u = tf.get_variable('U', shape=[self.params.node_dim, self.params.node_dim])
 
-  def _select_function(self):
-    self._function = {
-      'GRU':  self._GRU
-
-    }.get(self.params.update_function)
-
   def fprop(self, node_state, message, mask):
-    return self._function(node_state, message, mask)
+    return self._GRU(node_state, message, mask)
 
   def _GRU(self, node_state, message, mask):
     """Gated Recurrent Units (Cho et al., 2014)
@@ -201,7 +181,6 @@ class UpdateFunction(Model):
 class ReadoutFunction(Model):
   def __init__(self, params):
     super(ReadoutFunction, self).__init__(params)
-    self._select_function()
     self.init_graph()
 
   def _init_graph(self):
@@ -224,14 +203,8 @@ class ReadoutFunction(Model):
 
     return W, b
 
-  def _select_function(self):
-    self._function = {
-      'graph_level': self._graph_level
-
-    }.get(self.params.readout_function)
-  
   def fprop(self, hidden_node, input_node, mask):
-    return self._function(hidden_node, input_node, mask)
+    return self._graph_level(hidden_node, input_node, mask)
 
   def _graph_level(self, hidden_node, input_node, mask):
     """Using the Graph-level output described in GG-NN paper
@@ -263,14 +236,12 @@ class ReadoutFunction(Model):
         h_x = h_concat
         for l in range(self.params.num_layers):
           h_x = act(tf.matmul(h_x, self.W_i[l]) + self.b_i[l])
-
         i_out = tf.matmul(h_x, self.W_i[-1]) + self.b_i[-1]
 
       with tf.name_scope('fc_j'):
         h_x = h_concat
         for l in range(self.params.num_layers):
           h_x = act(tf.matmul(h_x, self.W_j[l]) + self.b_j[l])
-
         j_out = tf.matmul(h_x, self.W_j[-1]) + self.b_j[-1]
 
       gated_out = tf.multiply(tf.sigmoid(i_out), j_out)
