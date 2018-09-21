@@ -6,6 +6,20 @@ Model class implementations.
 import tensorflow as tf
 
 
+def _fully_connected_var(input_dim, num_layers, fc_dim, output_dim):
+  """Define weights of fully connected layers."""
+  W = []
+  b = []
+  layer_dim = input_dim
+  for l in range(num_layers):
+    W.append(tf.get_variable('W_{}'.format(l), shape=[layer_dim, fc_dim]))
+    b.append(tf.get_variable('b_{}'.format(l), shape=[fc_dim]))
+    layer_dim = fc_dim
+  W.append(tf.get_variable('W_out', shape=[layer_dim, output_dim]))
+  b.append(tf.get_variable('b_out', shape=[output_dim]))
+
+  return W, b
+
 class Model(object):
   """Super class for models."""
 
@@ -52,11 +66,7 @@ class MessageFunction(Model):
     if self.params.non_edge:
       pass
 
-  def fprop(
-    self, 
-    node_state,
-    adj_mat,
-    reuse=False):
+  def fprop(self, node_state, adj_mat, reuse=False):
     """Compute a_v^t from h_v^{t-1}.
     
     Args:
@@ -100,6 +110,89 @@ class MessageFunction(Model):
     """
 
     with tf.name_scope('GGNN'):
+      h_flat = tf.reshape(
+        node_state,
+        shape=[-1, self.params.node_dim * self.params.num_nodes, 1],
+        name='h_flat')
+
+      a_in_mult = tf.reshape(
+        tf.matmul(self.a_in, h_flat), 
+        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_in_mult')
+      a_out_mult = tf.reshape(
+        tf.matmul(self.a_out, h_flat),
+        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_out_mult')
+
+      a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='a_concat')
+      a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t_bias')
+      message = tf.reshape(a_t, shape=[self.params.batch_size, self.params.num_nodes, 2 * self.params.node_dim], name='message')
+
+    return message
+
+
+class EdgeMessagePassing(Model):
+  def __init__(self, params):
+    super(EdgeMessagePassing, self).__init__(params)
+    self.init_graph()
+
+  def _init_graph(self):
+    """Edge network"""
+    with tf.variable_scope('edge_nn_in'):
+      self.W_in, self.b_in = _fully_connected_var(
+        self.params.edge_dim,
+        self.params.edge_nn_layers,
+        self.params.edge_fc_dim,
+        self.params.node_dim**2)
+
+    with tf.variable_scope('edge_nn_out'):
+      self.W_out, self.b_out = _fully_connected_var(
+        self.params.edge_dim,
+        self.params.edge_nn_layers,
+        self.params.edge_fc_dim,
+        self.params.node_dim**2)
+
+  def _compute_parameter_tying(self, edge_state):
+    with tf.name_scope('precompute_edge_nn'):
+      with tf.name_scope('edge_tying_in'):
+        edge_mat_in = tf.reshape(
+          edge_state, 
+          shape=[self.params.batch_size * self.params.num_nodes * self.params.num_nodes, self.params.edge_dim], 
+          name='edge_mat_in')
+        for l in range(self.params.edge_nn_layers):
+          edge_mat_in = act(tf.matmul(edge_mat_in, self.W_in[l]) + self.b_in[l])
+        edge_mat_in = tf.matmul(edge_mat_in, self.W_in[-1]) + self.b_in[-1]
+        a_in = tf.reshape(edge_mat_in, shape=[self.params.batch_size, self.params.num_nodes, self.params.num_nodes, self.params.node_dim, self.params.node_dim])
+        self.a_in = tf.reshape(
+          tf.transpose(a_in, [0, 1, 3, 2, 4]), 
+          shape=[self.params.batch_size, self.params.num_nodes * self.params.node_dim, self.params.num_nodes * self.params.node_dim],
+          name='a_in')
+
+      with tf.name_scope('edge_tying_out'):
+        edge_mat_out = tf.reshape(
+          tf.transpose(edge_state, [0, 2, 1, 3]), 
+          shape=[self.params.batch_size * self.params.num_nodes * self.params.num_nodes, self.params.edge_dim], 
+          name='edge_mat_out')
+        for l in range(self.params.edge_nn_layers):
+          edge_mat_out = act(tf.matmul(edge_mat_out, self.W_out[l]) + self.b_out[l])
+        edge_mat_out = tf.matmul(edge_mat_out, self.W_out[-1]) + self.b_out[-1]
+        a_out = tf.reshape(edge_mat_out, shape=[self.params.batch_size, self.params.num_nodes, self.params.num_nodes, self.params.node_dim, self.params.node_dim])
+        self.a_out = tf.reshape(
+          tf.transpose(a_out, [0, 1, 3, 2, 4]), 
+          shape=[self.params.batch_size, self.params.num_nodes * self.params.node_dim, self.params.num_nodes * self.params.node_dim],
+          name='a_out')
+
+  def fprop(self, node_state, edge_state, reuse=False):
+    """
+    Args:
+      edge_state (tf.float32): [batch_size, num_nodes, num_nodes, edge_dim]
+    """
+
+    if not reuse:
+      self._compute_parameter_tying(edge_state)
+
+    return self._EENN(node_state, edge_state) 
+
+  def _EENN(self, node_state):
+    with tf.name_scope('EENN'):
       h_flat = tf.reshape(
         node_state,
         shape=[-1, self.params.node_dim * self.params.num_nodes, 1],
@@ -185,23 +278,17 @@ class ReadoutFunction(Model):
 
   def _init_graph(self):
     with tf.variable_scope('fully_connected_i'):
-      self.W_i, self.b_i = self._fully_connected_var('i')
+      self.W_i, self.b_i = _fully_connected_var(
+        self.params.node_dim * 2,
+        self.params.num_layers,
+        self.params.fc_dim,
+        self.params.output_dim)
     with tf.variable_scope('fully_connected_j'):
-      self.W_j, self.b_j = self._fully_connected_var('j')
-
-  def _fully_connected_var(self, name: str):
-    """Define weights of fully connected layers."""
-    W = []
-    b = []
-    layer_dim = 2 * self.params.node_dim    # dim of h_x concatenated by hidden_node and input_node
-    for l in range(self.params.num_layers):
-      W.append(tf.get_variable('W_{}'.format(l), shape=[layer_dim, self.params.fc_dim]))
-      b.append(tf.get_variable('b_{}'.format(l), shape=[self.params.fc_dim]))
-      layer_dim = self.params.fc_dim
-    W.append(tf.get_variable('W_out', shape=[layer_dim, self.params.output_dim]))
-    b.append(tf.get_variable('b_out', shape=[self.params.output_dim]))
-
-    return W, b
+      self.W_j, self.b_j = _fully_connected_var(
+        self.params.node_dim * 2,
+        self.params.num_layers,
+        self.params.fc_dim,
+        self.params.output_dim)
 
   def fprop(self, hidden_node, input_node, mask):
     return self._graph_level(hidden_node, input_node, mask)
