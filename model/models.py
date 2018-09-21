@@ -66,11 +66,12 @@ class MessageFunction(Model):
     if self.params.non_edge:
       pass
 
-  def fprop(self, node_state, adj_mat, reuse=False):
+  def fprop(self, node_state, edge_state, adj_mat, reuse=False):
     """Compute a_v^t from h_v^{t-1}.
     
     Args:
       node_state (tf.float32): [batch_size, num_nodes, node_dim]
+      edge_state: placeholder, not used
       adj_mat (tf.int32): [batch_size, num_nodes, num_nodes]
     """
 
@@ -151,6 +152,13 @@ class EdgeMessagePassing(Model):
         self.params.node_dim**2)
 
   def _compute_parameter_tying(self, edge_state):
+    if self.params.activation == 'relu':
+      act = tf.nn.relu
+    elif self.params.activation == 'tanh':
+      act = tf.tanh
+    else:
+      raise ValueError("Invalid activation: {}".format(self.params.activation))
+
     with tf.name_scope('precompute_edge_nn'):
       with tf.name_scope('edge_tying_in'):
         edge_mat_in = tf.reshape(
@@ -180,9 +188,10 @@ class EdgeMessagePassing(Model):
           shape=[self.params.batch_size, self.params.num_nodes * self.params.node_dim, self.params.num_nodes * self.params.node_dim],
           name='a_out')
 
-  def fprop(self, node_state, edge_state, reuse=False):
+  def fprop(self, node_state, edge_state, adj_mat, reuse=False):
     """
     Args:
+      adj_mat: placeholder, not used
       edge_state (tf.float32): [batch_size, num_nodes, num_nodes, edge_dim]
     """
 
@@ -191,7 +200,7 @@ class EdgeMessagePassing(Model):
 
     return self._EENN(node_state, edge_state) 
 
-  def _EENN(self, node_state):
+  def _EENN(self, node_state, edge_state):
     with tf.name_scope('EENN'):
       h_flat = tf.reshape(
         node_state,
@@ -206,7 +215,8 @@ class EdgeMessagePassing(Model):
         shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_out_mult')
 
       a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='a_concat')
-      a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t_bias')
+      #a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t_bias')
+      a_t = a_concat
       message = tf.reshape(a_t, shape=[self.params.batch_size, self.params.num_nodes, 2 * self.params.node_dim], name='message')
 
     return message

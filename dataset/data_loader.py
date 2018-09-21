@@ -20,6 +20,7 @@ class DataLoader:
       padded_shapes=(
         [hp.num_nodes, hp.num_nodes],
         [hp.num_nodes, hp.node_dim],
+        [hp.num_nodes, hp.num_nodes, hp.edge_dim],
         [hp.num_nodes],
         [None]))
     train = dataset.take(hp.train_batch_num)
@@ -43,6 +44,7 @@ class DataLoader:
     g = tf.cast(g, tf.int32)
     h = tf.cast(h, tf.float32)
     l = tf.cast(parsed['label'], tf.int64)
+    e = tf.cast(e, tf.float32)
     #tf.cond(tf.equal(l, 1), lambda:tf.Print(l, [l], message='###########################################') , lambda: tf.Print(l, [l], message='~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'))
     #l = tf.Print(l, [l], message='###########################################')
     num_nodes = tf.cast(parsed['num_nodes'], tf.int32)
@@ -50,9 +52,10 @@ class DataLoader:
     g = tf.reshape(g, shape=[num_nodes, num_nodes])
     h = tf.reshape(h, shape=[num_nodes, -1])
     l = tf.reshape(l, shape=[1])
+    e = tf.reshape(e, shape=[num_nodes, num_nodes, -1])
     #g = tf.Print(g, [tf.shape(g)], 'awleifyuhaskdfshfksahfuia')
 
     m = tf.ones(num_nodes, dtype=tf.float32)
 
-    return g, h, m, l
+    return g, h, e, m, l
 

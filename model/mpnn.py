@@ -34,6 +34,8 @@ class MPNN(models.Model):
       num_nodes=70,
       node_dim=50,
       edge_dim=50,
+      edge_nn_layers=3,
+      edge_fc_dim=50,
       fc_dim=200,
       num_layers=3,
       prop_step=6,
@@ -56,7 +58,13 @@ class MPNN(models.Model):
   def __init__(self, params):
     super(MPNN, self).__init__(params)
     
-    self._m_class = models.MessageFunction
+    if self.params.message_function == 'ggnn':
+      self._m_class = models.MessageFunction
+    elif self.params.message_function == 'edgenn':
+      self._m_class = models.EdgeMessagePassing
+    else:
+      raise ValueError(
+          "Invalid message function: {}".format(self.params.message_function))
     self._u_class = models.UpdateFunction
     self._r_class = models.ReadoutFunction
     
@@ -72,21 +80,21 @@ class MPNN(models.Model):
     
     self.r_function = self._r_class(self.params)
 
-  def fprop(self, input_node, adj_mat, mask):
+  def fprop(self, node_state, edge_state, adj_mat, mask):
     """If reuse_graph_tensor is True, create a single m_function for propogation. Otherwise create T m_functions, and call them in turn for T steps.
     """
 
-    h_t = input_node
+    h_t = node_state
     for t in range(self.params.prop_step):
       if self.params.reuse_graph_tensor:
-        message = self.m_function.fprop(h_t, adj_mat, reuse=(t != 0))
+        message = self.m_function.fprop(h_t, edge_state, adj_mat, reuse=(t != 0))
         h_t = self.u_function.fprop(h_t, message, mask)
       else:
-        message = self.m_function[t].fprop(h_t, adj_mat)
+        message = self.m_function[t].fprop(h_t, edge_state, adj_mat)
         h_t = self.u_function[t].fprop(h_t, message, mask)
     
     #message = tf.Print(message, [h_t.shape], 'Returned message is: ')
-    output = self.r_function.fprop(h_t, input_node, mask)
+    output = self.r_function.fprop(h_t, node_state, mask)
     return output
 
 
