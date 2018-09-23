@@ -31,12 +31,23 @@ def main():
   # Initialize hyper parameters
   hparams = MPNN.default_hparams()
   hparams.batch_size = 10
-  #hparams.padded_num_nodes = 
-  #hparams.node_dim = 
-  #hparams.prop_step = 
-  hparams.reuse_graph_tensor = True
-  hparams.log_step = 50
   hparams.epoch_num = 100
+
+  hparams.node_dim=10
+  hparams.edge_dim=10
+  hparams.num_nodes = 40
+  hparams.output_dim = 3
+  hparams.edge_nn_lay5rs=3
+  hparams.edge_fc_dim=50
+  hparams.num_layers=3
+  hparams.fc_dim=100
+  hparams.prop_step=3
+
+  hparams.message_function='edgenn'
+  hparams.train_batch_num=5000
+  hparams.valid_batch_num=500
+  hparams.reuse_graph_tensor=True
+  hparams.log_step = 1000
 
   # Create model
   graph = tf.Graph()
