@@ -15,6 +15,7 @@ class BaseTrain:
     self.hparams = hparams
     self.graph = graph
     self.sess = tf.Session(graph=self.graph, config=config)
+    self._global_step = 0
 
     with self.graph.as_default():
       self._make_train_step()
@@ -26,11 +27,12 @@ class BaseTrain:
                        tf.local_variables_initializer())
     self.sess.run(init_op)
     
-    writer = tf.summary.FileWriter('./tf_logs', self.sess.graph)
+    self.merged = tf.summary.merge_all()
+    self.writer = tf.summary.FileWriter('./tf_logs', self.sess.graph)
 
   def _make_train_step(self):
     """Create train step with optimizer in the graph."""
-    raise NotImplementedError('Subclass should implement run_eopch() method.')
+    raise NotImplementedError('Subclass should implement make_train_step() method.')
 
   def _evaluate(self, epoch_name: str, handle):
     """Evaluation epoch."""
@@ -52,7 +54,7 @@ class BaseTrain:
 
     return loss, accuracy, instance_per_sec
 
-  def _run_epoch(self, epoch_name: str, handle):
+  def _train_epoch(self, epoch_name: str, handle):
     """A single training epoch, which loops over the number of mini-batches."""
 
     loss = 0
@@ -62,11 +64,13 @@ class BaseTrain:
     # TODO: refactor: replace this if-else and for-loop block with while-loop and try-except
     steps = self.hparams.train_batch_num
     for step in range(steps):
-      fetch_list = [self.loss_op, self.accuracy_op, self.train_op]
+      fetch_list = [self.loss_op, self.accuracy_op, self.train_op, self.merged]
 
       batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
       loss += batch_result[0]
       accuracy += batch_result[1]
+      self.writer.add_summary(batch_result[3], self._global_step)
+      self._global_step += 1
 
       if step % self.hparams.log_step == 0:
         log.info('Running %s, batch %d/%d. Loss: %.4f' % (epoch_name,
@@ -96,7 +100,7 @@ class BaseTrain:
         log.infov('Epoch %i' % epoch)
 
         #Train
-        train_loss, train_acc, train_speed = self._run_epoch('epoch %i (training)' % epoch, train_handle)
+        train_loss, train_acc, train_speed = self._train_epoch('epoch %i (training)' % epoch, train_handle)
         log.infov(format_str % ('Training', train_loss, train_acc, train_speed))
 
         #Validate
@@ -117,7 +121,9 @@ class TrainerRegression(BaseTrain):
 
     pred = self.model.fprop(node_state, edge_state, adj_mat, mask)
     self.loss_op = tf.losses.mean_squared_error(label, pred)
+    tf.summary.scalar('loss', self.loss_op)
     self.accuracy_op = tf.reduce_mean(tf.abs(pred - label))
+    tf.summary.scalar('accuracy', self.accuracy_op)
     #self.accuracy_op = tf.metrics.mean_absolute_error(label, pred)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=self.hparams.learning_rate)
@@ -130,14 +136,17 @@ class TrainerClassification(BaseTrain):
 
   def _make_train_step(self):
     adj_mat, node_state, edge_state, mask, label = self.data.iterator.get_next()
+    label = tf.squeeze(label)
     one_hot_label = tf.one_hot(label, self.hparams.output_dim)
     logit = self.model.fprop(node_state, edge_state, adj_mat, mask)
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit, labels=one_hot_label)
     self.loss_op = tf.reduce_mean(loss)
+    tf.summary.scalar('loss', self.loss_op)
 
-    pred = tf.argmax(logit, 1)
-    correct = tf.equal(pred, label)
+    #pred = tf.argmax(logit, 1)
+    correct = tf.equal(tf.argmax(logit, 1), tf.argmax(one_hot_label, 1))
     self.accuracy_op = tf.reduce_mean(tf.cast(correct, tf.float32))
+    tf.summary.scalar('accuracy', self.accuracy_op)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=self.hparams.learning_rate)
     self.train_op = optimizer.minimize(self.loss_op)
