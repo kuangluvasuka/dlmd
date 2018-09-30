@@ -10,8 +10,8 @@ import numpy as np
 
 # Local modules
 from dataset.data_loader import DataLoader
-from utils.logger import log
-from utils.config import get_args
+from utils import log
+from utils import get_args
 from model.mpnn import MPNN
 from trainer import TrainerRegression
 from trainer import TrainerClassification

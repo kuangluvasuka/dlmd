@@ -1,8 +1,8 @@
-""" Setup logging environment """
 from __future__ import absolute_import
 from __future__ import print_function
 
 import logging
+import argparse
 from colorlog import ColoredFormatter
 
 format_str = '%(asctime)s - %(levelname)-8s - %(message)s'
@@ -27,3 +27,11 @@ def _infov(self, msg, *args, **kwargs):
   if self.isEnabledFor(INFO_LEVELV_NUM):
     self._log(INFO_LEVELV_NUM, msg, args, **kwargs)
 logging.Logger.infov = _infov
+
+def get_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--datapath', default='./dataset/qm9.tfrecords', help='Dataset path')
+  parser.add_argument('--batch-size', default=10, help='Batch size (default 10)')
+  args = parser.parse_args()
+
+  return args

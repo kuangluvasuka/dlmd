@@ -6,7 +6,7 @@ Training and evaluation classes for MPNN.
 import tensorflow as tf
 import time
 
-from utils.logger import log
+from utils import log
 
 class BaseTrain:
   def __init__(self, model, data, graph, hparams, config):

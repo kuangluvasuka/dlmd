@@ -18,7 +18,7 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
-from utils.logger import log
+from utils import log
 from xyz_parser import xyz_graph_decoder
 from xyz_parser import mol_graph_decoder
 
