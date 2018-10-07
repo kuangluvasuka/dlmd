@@ -3,6 +3,8 @@ from __future__ import print_function
 
 import logging
 import argparse
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
 from colorlog import ColoredFormatter
 
 format_str = '%(asctime)s - %(levelname)-8s - %(message)s'
@@ -35,3 +37,24 @@ def get_args():
   args = parser.parse_args()
 
   return args
+
+def plot_roc(y_score, y):
+  fpr = dict()
+  tpr = dict()
+  roc_auc = dict()
+  for i in range(3):
+    fpr[i], tpr[i], _ = roc_curve(y[:, i], y_score[:, i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
+
+  plt.figure()
+  lw = 2
+  plt.plot(fpr[1], tpr[1], color='g', lw=lw, label="1T ROC curve (area = %0.2f)" % roc_auc[1])
+  plt.plot(fpr[2], tpr[2], color='r', lw=lw, label="2H ROC curve (area = %0.2f)" % roc_auc[2])
+  plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+  plt.xlim([0.0, 1.0])
+  plt.ylim([0.0, 1.05])
+  plt.xlabel('FPR')
+  plt.ylabel('TPR')
+  plt.title("TITLE roc")
+  plt.legend(loc='lower right')
+  plt.savefig('./roc.png')

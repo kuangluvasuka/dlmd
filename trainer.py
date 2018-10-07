@@ -8,6 +8,7 @@ import numpy as np
 import time
 
 from utils import log
+from utils import plot_roc
 
 class BaseTrain:
   def __init__(self, model, data, graph, hparams, config):
@@ -40,7 +41,7 @@ class BaseTrain:
 
     logits = tf.one_hot(tf.argmax(logits, 1), self.hparams.output_dim)
     epsilon = tf.constant(0.00001)
-    f1 = []
+    measure = {k: [] for k in ['f1']}
     for i in range(self.hparams.output_dim):
       pred = logits[:, i]
       actual = labels[:, i]
@@ -54,14 +55,14 @@ class BaseTrain:
       precision = tp / (tp + fp + epsilon)
       recall = tp / (tp + fn + epsilon)
       fmeasure = (2 * precision * recall) / (precision + recall + epsilon)
-      f1.append(fmeasure)
+      measure['f1'].append(fmeasure)
 
     # for 1T&2H classification only
-    tf.summary.scalar('f1_score_disordered', f1[0])
-    tf.summary.scalar('f1_score_1T', f1[1])
-    tf.summary.scalar('f1_score_2H', f1[2])
+    tf.summary.scalar('f1_score_disordered', measure['f1'][0])
+    tf.summary.scalar('f1_score_1T', measure['f1'][1])
+    tf.summary.scalar('f1_score_2H', measure['f1'][2])
 
-    return f1
+    return measure
 
   def _evaluate(self, epoch_name: str, handle):
     """Evaluation epoch."""
@@ -69,24 +70,29 @@ class BaseTrain:
     loss = 0
     accuracy = 0
     f1_scores = []
+    y_score = []
+    y = []
     format_str = ('%s: loss: %.5f | acc: %.5f | examples/sec: %.2f \n f1 scores: disorderd %0.5f | 1T %0.5f | 2H %0.5f')
     steps = self.hparams.valid_batch_num
     start_time = time.time()
 
     for step in range(steps):
-      fetch_list = [self.loss_op, self.accuracy_op, self.f1_score]
+      fetch_list = [self.loss_op, self.accuracy_op, self.measure, self.y_score, self.y]
       batch_result = self.sess.run(fetch_list, feed_dict={self.data.handle: handle})
       loss += batch_result[0]
       accuracy += batch_result[1]
-      f1_scores.append(batch_result[2])
-
+      f1_scores.append(batch_result[2]['f1'])
+      y_score.append(batch_result[3])
+      y.append(batch_result[4])
+      
     instance_per_sec = steps * self.hparams.batch_size / (time.time() - start_time)
     loss = loss / steps
     accuracy = accuracy / steps
     f1_scores = np.sum(f1_scores, axis=0) / steps
     log.infov(format_str % ('Validation', loss, accuracy, instance_per_sec, f1_scores[0], f1_scores[1], f1_scores[2]))
 
-    return loss, accuracy, instance_per_sec, f1_scores
+    return y_score, y
+    #return loss, accuracy, instance_per_sec, f1_scores
 
   def _train_epoch(self, epoch_name: str, handle):
     """A single training epoch, which loops over the number of mini-batches."""
@@ -117,7 +123,7 @@ class BaseTrain:
     accuracy = accuracy / steps
     log.infov(format_str % ('Training', loss, accuracy, instance_per_sec))
 
-    return loss, accuracy, instance_per_sec
+    #return loss, accuracy, instance_per_sec
 
 
   def train(self):
@@ -134,7 +140,12 @@ class BaseTrain:
         #Train
         self._train_epoch('epoch %i (training)' % epoch, train_handle)
         #Validate
-        self._evaluate('epoch %i (evaluating)' % epoch, valid_handle)
+        y_score, y = self._evaluate('epoch %i (evaluating)' % epoch, valid_handle)
+      
+      # call roc
+      y_score = np.concatenate(y_score, axis=0)
+      y = np.concatenate(y, axis=0)
+      plot_roc(y_score, y)
 
         # TODO: save logs to file
 
@@ -167,7 +178,9 @@ class TrainerClassification(BaseTrain):
     label = tf.squeeze(label)
     one_hot_label = tf.one_hot(label, self.hparams.output_dim)
     logit = self.model.fprop(node_state, edge_state, adj_mat, mask)
-    self.f1_score = self.metrics(logit, one_hot_label)
+    self.y_score = tf.nn.softmax(logit)
+    self.y = one_hot_label
+    self.measure = self.metrics(logit, one_hot_label)
 
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit, labels=one_hot_label)
     self.loss_op = tf.reduce_mean(loss)
