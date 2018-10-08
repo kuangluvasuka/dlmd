@@ -81,6 +81,8 @@ class MessageFunction(Model):
     return self._GGNN(node_state, adj_mat)
 
   def _compute_parameter_tying(self, adj_mat):
+    batch_size = tf.shape(adj_mat)[0]
+    num_nodes = tf.shape(adj_mat)[1]
     with tf.name_scope('precompute_graph'):
       a_in_gather = tf.gather(self.matrix_in, adj_mat, name='a_in_gather')
       a_out_gather = tf.gather(self.matrix_out, tf.transpose(adj_mat, [0, 2, 1]), name='a_out_gather')
@@ -88,12 +90,12 @@ class MessageFunction(Model):
       a_out = tf.transpose(a_out_gather, [0, 1, 3, 2, 4], name='a_out_tp')
       self.a_in = tf.reshape(
         a_in,
-        shape=[-1, self.params.node_dim * self.params.num_nodes, self.params.node_dim * self.params.num_nodes],
+        shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes],
         name='a_in')
       #a_in_flat = tf.Print(a_in_flat, [tf.shape(a_in_flat)], '~~~~~~~~~~~~~~~: ')
       self.a_out = tf.reshape(
         a_out,
-        shape=[-1, self.params.node_dim * self.params.num_nodes, self.params.node_dim * self.params.num_nodes],
+        shape=[-1, self.params.node_dim * num_nodes, self.params.node_dim * num_nodes],
         name='a_out')
 
   def _GGNN(self, node_state, adj_mat):
@@ -110,22 +112,24 @@ class MessageFunction(Model):
                         [batch_size, num_nodes, 2 * node_dim]
     """
 
+    batch_size = tf.shape(node_state)[0]
+    num_nodes = tf.shape(node_state)[1]
     with tf.name_scope('GGNN'):
       h_flat = tf.reshape(
         node_state,
-        shape=[-1, self.params.node_dim * self.params.num_nodes, 1],
+        shape=[-1, self.params.node_dim * num_nodes, 1],
         name='h_flat')
 
       a_in_mult = tf.reshape(
         tf.matmul(self.a_in, h_flat), 
-        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_in_mult')
+        shape=[batch_size * num_nodes, self.params.node_dim], name='a_in_mult')
       a_out_mult = tf.reshape(
         tf.matmul(self.a_out, h_flat),
-        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_out_mult')
+        shape=[batch_size * num_nodes, self.params.node_dim], name='a_out_mult')
 
       a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='a_concat')
       a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t_bias')
-      message = tf.reshape(a_t, shape=[self.params.batch_size, self.params.num_nodes, 2 * self.params.node_dim], name='message')
+      message = tf.reshape(a_t, shape=[batch_size, num_nodes, 2 * self.params.node_dim], name='message')
 
     return message
 
@@ -159,33 +163,35 @@ class EdgeMessagePassing(Model):
     else:
       raise ValueError("Invalid activation: {}".format(self.params.activation))
 
+    batch_size = tf.shape(edge_state)[0]
+    num_nodes = tf.shape(edge_state)[1]
     with tf.name_scope('precompute_edge_nn'):
       with tf.name_scope('edge_tying_in'):
         edge_mat_in = tf.reshape(
           edge_state, 
-          shape=[self.params.batch_size * self.params.num_nodes * self.params.num_nodes, self.params.edge_dim], 
+          shape=[batch_size * num_nodes * num_nodes, self.params.edge_dim], 
           name='edge_mat_in')
         for l in range(self.params.edge_nn_layers):
           edge_mat_in = act(tf.matmul(edge_mat_in, self.W_in[l]) + self.b_in[l])
         edge_mat_in = tf.matmul(edge_mat_in, self.W_in[-1]) + self.b_in[-1]
-        a_in = tf.reshape(edge_mat_in, shape=[self.params.batch_size, self.params.num_nodes, self.params.num_nodes, self.params.node_dim, self.params.node_dim])
+        a_in = tf.reshape(edge_mat_in, shape=[batch_size, num_nodes, num_nodes, self.params.node_dim, self.params.node_dim])
         self.a_in = tf.reshape(
           tf.transpose(a_in, [0, 1, 3, 2, 4]), 
-          shape=[self.params.batch_size, self.params.num_nodes * self.params.node_dim, self.params.num_nodes * self.params.node_dim],
+          shape=[batch_size, num_nodes * self.params.node_dim, num_nodes * self.params.node_dim],
           name='a_in')
 
       with tf.name_scope('edge_tying_out'):
         edge_mat_out = tf.reshape(
           tf.transpose(edge_state, [0, 2, 1, 3]), 
-          shape=[self.params.batch_size * self.params.num_nodes * self.params.num_nodes, self.params.edge_dim], 
+          shape=[batch_size * num_nodes * num_nodes, self.params.edge_dim], 
           name='edge_mat_out')
         for l in range(self.params.edge_nn_layers):
           edge_mat_out = act(tf.matmul(edge_mat_out, self.W_out[l]) + self.b_out[l])
         edge_mat_out = tf.matmul(edge_mat_out, self.W_out[-1]) + self.b_out[-1]
-        a_out = tf.reshape(edge_mat_out, shape=[self.params.batch_size, self.params.num_nodes, self.params.num_nodes, self.params.node_dim, self.params.node_dim])
+        a_out = tf.reshape(edge_mat_out, shape=[batch_size, num_nodes, num_nodes, self.params.node_dim, self.params.node_dim])
         self.a_out = tf.reshape(
           tf.transpose(a_out, [0, 1, 3, 2, 4]), 
-          shape=[self.params.batch_size, self.params.num_nodes * self.params.node_dim, self.params.num_nodes * self.params.node_dim],
+          shape=[batch_size, num_nodes * self.params.node_dim, num_nodes * self.params.node_dim],
           name='a_out')
 
   def fprop(self, node_state, edge_state, adj_mat, reuse=False):
@@ -201,23 +207,25 @@ class EdgeMessagePassing(Model):
     return self._EENN(node_state, edge_state) 
 
   def _EENN(self, node_state, edge_state):
+    batch_size = tf.shape(node_state)[0]
+    num_nodes = tf.shape(node_state)[1]
     with tf.name_scope('EENN'):
       h_flat = tf.reshape(
         node_state,
-        shape=[-1, self.params.node_dim * self.params.num_nodes, 1],
+        shape=[-1, self.params.node_dim * num_nodes, 1],
         name='h_flat')
 
       a_in_mult = tf.reshape(
         tf.matmul(self.a_in, h_flat), 
-        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_in_mult')
+        shape=[batch_size * num_nodes, self.params.node_dim], name='a_in_mult')
       a_out_mult = tf.reshape(
         tf.matmul(self.a_out, h_flat),
-        shape=[self.params.batch_size * self.params.num_nodes, self.params.node_dim], name='a_out_mult')
+        shape=[batch_size * num_nodes, self.params.node_dim], name='a_out_mult')
 
       a_concat = tf.concat([a_in_mult, a_out_mult], axis=1, name='a_concat')
       #a_t = tf.nn.bias_add(a_concat, self.bias, name='a_t_bias')
       a_t = a_concat
-      message = tf.reshape(a_t, shape=[self.params.batch_size, self.params.num_nodes, 2 * self.params.node_dim], name='message')
+      message = tf.reshape(a_t, shape=[batch_size, num_nodes, 2 * self.params.node_dim], name='message')
 
     return message
 
@@ -261,9 +269,11 @@ class UpdateFunction(Model):
       h_t_rs: [batch_size, num_nodes, node_dim]
     """
 
+    batch_size = tf.shape(node_state)[0]
+    num_nodes = tf.shape(node_state)[1]
     with tf.name_scope('GRU'):
-      h_rs = tf.reshape(node_state, shape=[self.params.batch_size * self.params.num_nodes, -1], name='h_rs')
-      m_rs = tf.reshape(message, shape=[self.params.batch_size * self.params.num_nodes, -1], name='m_rs')
+      h_rs = tf.reshape(node_state, shape=[batch_size * num_nodes, -1], name='h_rs')
+      m_rs = tf.reshape(message, shape=[batch_size * num_nodes, -1], name='m_rs')
 
       z_t = tf.sigmoid(
         tf.matmul(m_rs, self.w_z) + tf.matmul(h_rs, self.u_z), name='z_t')
@@ -273,10 +283,10 @@ class UpdateFunction(Model):
         tf.matmul(m_rs, self.w) + tf.matmul(tf.multiply(r_t, h_rs), self.u), name='h_tilda')
       h_t = tf.add(tf.multiply(1 - z_t, h_rs), tf.multiply(z_t, h_tilda), name='h_t')
       mask_col = tf.reshape(mask, 
-                            shape=[self.params.batch_size * self.params.num_nodes, 1], 
+                            shape=[batch_size * num_nodes, 1], 
                             name='mask_col')
       h_t_mask = tf.multiply(h_t, mask_col, name='h_t_mask')
-      h_t_rs = tf.reshape(h_t_mask, shape=[self.params.batch_size, self.params.num_nodes, -1], name='h_t_rs')
+      h_t_rs = tf.reshape(h_t_mask, shape=[batch_size, num_nodes, -1], name='h_t_rs')
 
       return h_t_rs
 
@@ -322,11 +332,13 @@ class ReadoutFunction(Model):
     else:
       raise ValueError("Invalid activation: {}".format(self.params.activation))
 
+    batch_size = tf.shape(input_node)[0]
+    num_nodes = tf.shape(input_node)[1]
     with tf.name_scope('feedforward_nn'):
       # The concat vector should have dim of [batch_size*num_nodes, 2*node_dim]
       h_concat = tf.reshape(
         tf.concat([hidden_node, input_node], axis=2, name='concat'),
-        shape=[self.params.batch_size * self.params.num_nodes, -1],
+        shape=[batch_size * num_nodes, -1],
         name='h_concat')
 
       with tf.name_scope('fc_i'):
@@ -343,12 +355,12 @@ class ReadoutFunction(Model):
 
       gated_out = tf.multiply(tf.sigmoid(i_out), j_out)
       mask_col = tf.reshape(mask, 
-                            shape=[self.params.batch_size * self.params.num_nodes, 1], 
+                            shape=[batch_size * num_nodes, 1], 
                             name='mask_col')
       gated_mask = tf.multiply(gated_out, mask_col, name='gated_mask')
       gated_rs = tf.reshape(
         gated_mask,
-        shape=[self.params.batch_size, self.params.num_nodes, self.params.output_dim],
+        shape=[batch_size, num_nodes, self.params.output_dim],
         name='gated_rs')
       output = tf.reduce_sum(gated_rs, axis=1, name='output')
 
